@@ -74,6 +74,7 @@ export const selectActiveMembership = (state) => {
 }
 export const selectActiveRole = (state) => selectActiveMembership(state)?.role?.code ?? null
 
+export const selectAccessToken = (state) => state.auth.access
 export const selectRefreshToken = (state) => state.auth.refresh
 export const selectIsAuthenticated = (state) => Boolean(state.auth.access)
 export default authSlice.reducer

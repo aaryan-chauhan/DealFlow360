@@ -164,3 +164,21 @@ PORTAL_TOKEN_TTL_HOURS = int(env("PORTAL_TOKEN_TTL_HOURS", "72"))
 # link that works on the LAN instead of one that only opens on the server's localhost.
 # Set it explicitly for a deployment with a fixed customer-facing hostname.
 PORTAL_BASE_URL = env("PORTAL_BASE_URL", "")
+
+# --- Outbound email (spec A1: the portal link a rep generates must actually reach the
+# customer's inbox, not just get copy-pasted) ------------------------------------------
+# No EMAIL_HOST in .env => Django's console backend, which "sends" by printing to the
+# runserver log. Real delivery only starts once real SMTP credentials are supplied — set
+# EMAIL_HOST/EMAIL_HOST_USER/EMAIL_HOST_PASSWORD (e.g. a Gmail address + App Password) in
+# .env. Nothing here should ever crash a request for want of email config.
+if env("EMAIL_HOST"):
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_HOST = env("EMAIL_HOST")
+    EMAIL_PORT = int(env("EMAIL_PORT", "587"))
+    EMAIL_HOST_USER = env("EMAIL_HOST_USER", "")
+    EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", "")
+    EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "DealFlow360 <no-reply@dealflow360.local>")

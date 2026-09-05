@@ -37,10 +37,18 @@ class UserSerializer(serializers.ModelSerializer):
 
 class CustomerSerializer(serializers.ModelSerializer):
     quotation_count = serializers.IntegerField(source="quotations.count", read_only=True)
+    has_portal_login = serializers.BooleanField(source="has_usable_password", read_only=True)
+    # Write-only and optional: a rep may set/replace the customer's self-service portal
+    # password here (spec A1), or leave it blank to change nothing (never blank an
+    # existing password just because the field wasn't sent on an unrelated edit).
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = Customer
-        fields = ["id", "name", "tier", "email", "location", "quotation_count", "created_at"]
+        fields = [
+            "id", "name", "tier", "email", "location", "quotation_count", "created_at",
+            "has_portal_login", "password",
+        ]
 
     def validate_email(self, value):
         company = self.context["membership"].company
@@ -50,6 +58,27 @@ class CustomerSerializer(serializers.ModelSerializer):
         if qs.exists():
             raise serializers.ValidationError("A customer with this email already exists.")
         return value.strip()
+
+    def validate_password(self, value):
+        if value:
+            validate_password(value)
+        return value
+
+    def create(self, validated_data):
+        password = validated_data.pop("password", "")
+        customer = Customer(**validated_data)
+        if password:
+            customer.set_password(password)
+        customer.save()
+        return customer
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop("password", "")
+        instance = super().update(instance, validated_data)
+        if password:
+            instance.set_password(password)
+            instance.save(update_fields=["password_hash", "updated_at"])
+        return instance
 
 
 class SignupSerializer(serializers.Serializer):

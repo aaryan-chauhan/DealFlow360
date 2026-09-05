@@ -1,5 +1,6 @@
 import uuid
 
+from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 from django.utils import timezone
@@ -129,6 +130,17 @@ class Customer(UUIDModel, TimeStampedModel):
             )
         ]
         ordering = ["name"]
+
+    def set_password(self, raw_password):
+        self.password_hash = make_password(raw_password)
+
+    def check_password(self, raw_password):
+        if not self.password_hash:
+            return False
+        return check_password(raw_password, self.password_hash)
+
+    def has_usable_password(self):
+        return bool(self.password_hash)
 
     def __str__(self):
         return f"{self.name} ({self.tier})"

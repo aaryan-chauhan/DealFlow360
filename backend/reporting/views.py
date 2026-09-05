@@ -5,7 +5,19 @@ from rest_framework.views import APIView
 
 from accounts.permissions import IsSalesManager
 from accounts.scoping import get_membership
-from reporting.services import generate_reporting_csv, get_reporting_summary
+from reporting.services import generate_reporting_pdf, generate_reporting_xlsx, get_reporting_summary
+
+
+def _filters_from_params(params):
+    return {
+        "sales_rep_id": params.get("sales_rep") or None,
+        "period": params.get("period") or params.get("date_range") or None,
+        "date_from": params.get("date_from") or None,
+        "date_to": params.get("date_to") or None,
+        "approval_status": params.get("approval_status") or None,
+        "category": params.get("category") or None,
+        "product_id": params.get("product") or None,
+    }
 
 
 class ReportingSummaryView(APIView):
@@ -16,14 +28,13 @@ class ReportingSummaryView(APIView):
         if not membership:
             return Response({"detail": "Active membership required"}, status=status.HTTP_403_FORBIDDEN)
 
-        rep_id = request.query_params.get("sales_rep")
-        date_range = request.query_params.get("date_range")
-
-        data = get_reporting_summary(membership.company, sales_rep_id=rep_id, date_range=date_range)
+        data = get_reporting_summary(membership.company, **_filters_from_params(request.query_params))
         return Response(data, status=status.HTTP_200_OK)
 
 
 class ReportingExportView(APIView):
+    """`GET /api/reports/export?format=pdf|xls` (spec §8)."""
+
     permission_classes = [IsSalesManager]
 
     def get(self, request):
@@ -31,9 +42,22 @@ class ReportingExportView(APIView):
         if not membership:
             return Response({"detail": "Active membership required"}, status=status.HTTP_403_FORBIDDEN)
 
-        rep_id = request.query_params.get("sales_rep")
-        csv_content = generate_reporting_csv(membership.company, sales_rep_id=rep_id)
+        fmt = (request.query_params.get("format") or "xls").lower()
+        filters = _filters_from_params(request.query_params)
 
-        response = HttpResponse(csv_content, content_type="text/csv")
-        response["Content-Disposition"] = 'attachment; filename="dealflow_sales_report.csv"'
-        return response
+        if fmt == "pdf":
+            content = generate_reporting_pdf(membership.company, **filters)
+            response = HttpResponse(content, content_type="application/pdf")
+            response["Content-Disposition"] = 'attachment; filename="dealflow_sales_report.pdf"'
+            return response
+
+        if fmt == "xls":
+            content = generate_reporting_xlsx(membership.company, **filters)
+            response = HttpResponse(
+                content,
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            response["Content-Disposition"] = 'attachment; filename="dealflow_sales_report.xlsx"'
+            return response
+
+        return Response({"detail": "format must be 'pdf' or 'xls'."}, status=status.HTTP_400_BAD_REQUEST)

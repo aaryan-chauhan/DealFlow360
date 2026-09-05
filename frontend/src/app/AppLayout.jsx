@@ -51,12 +51,6 @@ const NAV = [
     icon: 'discounts',
     roles: ['admin', 'sales_manager'],
   },
-  {
-    label: 'Upsell Rules',
-    to: '/admin/upsell-rules',
-    icon: 'discounts',
-    roles: ['admin', 'sales_manager'],
-  },
   { label: 'Invoices', to: '/invoices', icon: 'invoices' },
 
   { label: 'Subscriptions', to: '/subscriptions', icon: 'subscriptions' },
@@ -102,20 +96,7 @@ export default function AppLayout() {
           <Logo />
         </div>
         <nav className="flex-1 space-y-0.5 px-3 py-2">
-          {NAV.map((item) => {
-            const allowed = item.to && (!item.roles || item.roles.includes(role))
-            if (!allowed) {
-              return (
-                <span
-                  key={item.label}
-                  title="Arrives in a later build phase"
-                  className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-600"
-                >
-                  <NavIcon name={item.icon} />
-                  {item.label}
-                </span>
-              )
-            }
+          {NAV.filter((item) => !item.roles || item.roles.includes(role)).map((item) => {
             return (
               <NavLink
                 key={item.label}

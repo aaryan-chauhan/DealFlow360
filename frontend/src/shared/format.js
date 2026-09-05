@@ -1,5 +1,12 @@
+// INR is the one currency here whose grouping actually differs (lakhs/crores) from
+// plain thousands, which is why it gets its own locale — every other supported currency
+// (backend `PriceList.CURRENCY_CHOICES`) renders correctly off a single Western locale,
+// since `Intl.NumberFormat` picks the right symbol from `currency` regardless of locale.
+const LOCALE_BY_CURRENCY = { INR: 'en-IN' }
+
 export function formatCurrency(value, currency = 'INR') {
-  return new Intl.NumberFormat('en-IN', {
+  const locale = LOCALE_BY_CURRENCY[currency] || 'en-US'
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
     maximumFractionDigits: 0,

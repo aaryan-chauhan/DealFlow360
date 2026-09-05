@@ -15,6 +15,17 @@ import {
 
 const TABS = ['All Products', 'Price Lists', 'Categories', 'Variants']
 const CATEGORIES = ['Hardware', 'Software', 'Services', 'Subscription']
+// Mirrors backend PriceList.CURRENCY_CHOICES — a closed set so "currency specific
+// rules" (spec A2) only ever apply to a currency the formatter actually knows how to
+// render, not anything an admin happens to type.
+const CURRENCIES = [
+  { value: 'INR', label: 'INR — Indian Rupee' },
+  { value: 'USD', label: 'USD — US Dollar' },
+  { value: 'EUR', label: 'EUR — Euro' },
+  { value: 'GBP', label: 'GBP — British Pound' },
+  { value: 'AED', label: 'AED — UAE Dirham' },
+  { value: 'SGD', label: 'SGD — Singapore Dollar' },
+]
 const CATEGORY_TINT = {
   Hardware: 'bg-blue-100 text-blue-700',
   Software: 'bg-violet-100 text-violet-700',
@@ -297,12 +308,12 @@ function AddPriceListModal({ onClose }) {
           placeholder="India, INR"
           required
         />
-        <TextField
+        <SelectField
           label="Currency"
           value={form.currency}
           onChange={update('currency')}
           error={fieldErrors.currency}
-          maxLength={3}
+          options={CURRENCIES}
           required
         />
         <div className="flex justify-end gap-2 pt-2">

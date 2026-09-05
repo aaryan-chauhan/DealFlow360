@@ -1,23 +1,10 @@
 import { Provider } from 'react-redux'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
+import PortalLoginPage from './PortalLoginPage'
+import PortalMyQuotationsPage from './PortalMyQuotationsPage'
 import PortalNegotiationPage from './PortalNegotiationPage'
 import { portalStore } from './portalStore'
-
-function MissingLink() {
-  return (
-    <div className="mx-auto mt-24 max-w-md rounded-xl border border-slate-200 bg-white p-8 text-center">
-      <h1 className="text-lg font-semibold text-slate-900">Nothing to show here</h1>
-      <p className="mt-2 text-sm text-slate-600">
-        Open the quotation link your account manager sent you. It looks like{' '}
-        <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">
-          /portal/quotations/…
-        </code>
-        .
-      </p>
-    </div>
-  )
-}
 
 /**
  * The customer portal's root (spec §3, §10).
@@ -39,7 +26,8 @@ export default function PortalApp() {
       <div className="min-h-screen bg-slate-50">
         <Routes>
           <Route path="quotations/:token" element={<PortalNegotiationPage />} />
-          <Route path="" element={<MissingLink />} />
+          <Route path="my-quotations/:token" element={<PortalMyQuotationsPage />} />
+          <Route path="" element={<PortalLoginPage />} />
           <Route path="*" element={<Navigate to="/portal" replace />} />
         </Routes>
       </div>

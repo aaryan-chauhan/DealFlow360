@@ -9,10 +9,22 @@ from .views import (
     PortalCommentView,
     PortalConfirmView,
     PortalCounterOfferView,
+    PortalLoginView,
+    PortalMyQuotationsView,
+    PortalOpenQuotationView,
     PortalQuotationView,
 )
 
 urlpatterns = [
+    # Literal routes first so "login" / "me" can never be swallowed by the <str:token>
+    # patterns below (mirrors the ordering rule already used in quotations/urls.py).
+    path("login", PortalLoginView.as_view(), name="portal-login"),
+    path("me/quotations/<str:token>", PortalMyQuotationsView.as_view(), name="portal-my-quotations"),
+    path(
+        "me/quotations/<str:token>/<uuid:quotation_id>/open",
+        PortalOpenQuotationView.as_view(),
+        name="portal-open-quotation",
+    ),
     path("quotations/<str:token>", PortalQuotationView.as_view(), name="portal-quotation"),
     path("<str:token>/comment", PortalCommentView.as_view(), name="portal-comment"),
     path(

@@ -72,9 +72,27 @@ class PriceList(UUIDModel, TimeStampedModel):
     """A named price book (e.g. "India, INR"). Pricing varies by currency/segment, so it
     is not a fixed attribute of the product."""
 
+    # A closed set rather than free text — "currency specific rules" (spec A2) only work
+    # if the value is a real, known ISO-4217 code the frontend can format against, not
+    # anything an admin happens to type.
+    INR = "INR"
+    USD = "USD"
+    EUR = "EUR"
+    GBP = "GBP"
+    AED = "AED"
+    SGD = "SGD"
+    CURRENCY_CHOICES = [
+        (INR, "INR — Indian Rupee"),
+        (USD, "USD — US Dollar"),
+        (EUR, "EUR — Euro"),
+        (GBP, "GBP — British Pound"),
+        (AED, "AED — UAE Dirham"),
+        (SGD, "SGD — Singapore Dollar"),
+    ]
+
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="price_lists")
     name = models.CharField(max_length=255)
-    currency = models.CharField(max_length=3, default="INR")
+    currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES, default=INR)
 
     class Meta:
         db_table = "price_list"

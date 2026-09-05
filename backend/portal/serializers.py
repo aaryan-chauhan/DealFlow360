@@ -183,3 +183,21 @@ class ConfirmInputSerializer(serializers.Serializer):
         max_length=4000, required=False, allow_blank=True, trim_whitespace=True, default=""
     )
     quotation = serializers.UUIDField(required=False, allow_null=True)
+
+
+class CustomerLoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(trim_whitespace=False)
+
+
+class CustomerQuotationSummarySerializer(serializers.ModelSerializer):
+    """One row of the "My Quotations" list — deliberately narrower than the internal
+    list serializer: a status and a total is enough to decide what to open next, nothing
+    about risk scores or governance internals (§5.9)."""
+
+    total_value = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
+
+    class Meta:
+        model = Quotation
+        fields = ["id", "number", "status", "company_name", "total_value", "valid_till", "updated_at"]

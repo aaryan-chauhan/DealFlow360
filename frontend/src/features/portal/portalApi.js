@@ -18,8 +18,26 @@ const portalBaseUrl =
 export const portalApi = createApi({
   reducerPath: 'portalApi',
   baseQuery: fetchBaseQuery({ baseUrl: portalBaseUrl }),
-  tagTypes: ['PortalQuotation'],
+  tagTypes: ['PortalQuotation', 'MyQuotations'],
   endpoints: (builder) => ({
+    // The customer's second entry point (spec A1): email + password instead of a
+    // rep-sent link, in exchange for a customer-scoped token (never a JWT, never
+    // workspace-wide) good for listing and opening this customer's own quotations.
+    loginCustomer: builder.mutation({
+      query: (body) => ({ url: '/login', method: 'POST', body }),
+    }),
+    getMyQuotations: builder.query({
+      query: (token) => `/me/quotations/${token}`,
+      providesTags: ['MyQuotations'],
+    }),
+    // Mints an ordinary single-quotation session for one of the customer's own deals —
+    // the caller then opens `/portal/quotations/{token}` exactly like a rep-sent link.
+    openQuotation: builder.mutation({
+      query: ({ token, quotationId }) => ({
+        url: `/me/quotations/${token}/${quotationId}/open`,
+        method: 'POST',
+      }),
+    }),
     getPortalQuotation: builder.query({
       query: (token) => `/quotations/${token}`,
       providesTags: ['PortalQuotation'],
@@ -44,6 +62,9 @@ export const portalApi = createApi({
 })
 
 export const {
+  useLoginCustomerMutation,
+  useGetMyQuotationsQuery,
+  useOpenQuotationMutation,
   useGetPortalQuotationQuery,
   usePostCommentMutation,
   usePostCounterOfferMutation,

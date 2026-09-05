@@ -17,7 +17,7 @@ function initials(name) {
 }
 
 function AddCustomerModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({ name: '', email: '', tier: 'Bronze', location: '' })
+  const [form, setForm] = useState({ name: '', email: '', tier: 'Bronze', location: '', password: '' })
   const [createCustomer, { isLoading, error }] = useCreateCustomerMutation()
   const { formError, fieldErrors } = parseApiError(error)
   const update = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
@@ -74,6 +74,14 @@ function AddCustomerModal({ onClose, onCreated }) {
             placeholder="Mumbai, India"
           />
         </div>
+        <TextField
+          label="Portal password (optional)"
+          type="password"
+          value={form.password}
+          onChange={update('password')}
+          error={fieldErrors.password}
+          placeholder="Leave blank to only allow the emailed magic link"
+        />
         <div className="flex justify-end gap-2 pt-2">
           <button
             type="button"

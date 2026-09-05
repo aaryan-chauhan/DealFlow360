@@ -445,6 +445,39 @@ class InternalSideTests(PortalTestBase):
             200,
         )
 
+    def test_generating_a_link_emails_the_customer(self):
+        """Spec A1: the link must actually reach the customer's inbox, not just sit on
+        the rep's screen to copy by hand. Django's test runner swaps in the locmem email
+        backend regardless of settings, so a real send is captured in `mail.outbox`."""
+        from django.core import mail
+
+        quotation = self.make_quotation()
+        response = self.internal(self.rep).post(
+            f"/api/quotations/{quotation.id}/generate-portal-link", {}, format="json"
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.json()["emailed"])
+
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+        self.assertEqual(sent.to, [self.customer.email])
+        self.assertIn(quotation.number, sent.subject)
+        self.assertIn(response.json()["portal_url"], sent.body)
+
+    def test_a_broken_email_backend_does_not_break_the_link_response(self):
+        """The rep must still get the link even if outbound email is misconfigured —
+        see `portal.services.send_portal_link_email`'s broad except."""
+        from unittest.mock import patch
+
+        quotation = self.make_quotation()
+        with patch("portal.services.send_mail", side_effect=RuntimeError("smtp down")):
+            response = self.internal(self.rep).post(
+                f"/api/quotations/{quotation.id}/generate-portal-link", {}, format="json"
+            )
+        self.assertEqual(response.status_code, 201)
+        self.assertFalse(response.json()["emailed"])
+        self.assertIn("/portal/quotations/", response.json()["portal_url"])
+
     def test_rep_cannot_generate_a_link_for_someone_elses_deal(self):
         other_rep = User.objects.create_user(email="rep2@test.com", password="x")
         Membership.objects.create(
@@ -501,3 +534,84 @@ class InternalSideTests(PortalTestBase):
         self.assertIsNotNone(detail["portal_link"])
         # Never the credential itself, only its lifecycle.
         self.assertNotIn("token", detail["portal_link"])
+
+
+class CustomerLoginTests(PortalTestBase):
+    """Email+password login (spec A1) — the customer's second entry point, alongside a
+    rep-sent magic link, and the "My Quotations" list it unlocks."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.customer.set_password("hunter2pass")
+        cls.customer.save(update_fields=["password_hash"])
+
+    def test_login_with_correct_password_succeeds(self):
+        response = self.portal_client().post(
+            "/api/portal/login", {"email": "buy@test.com", "password": "hunter2pass"}, format="json"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("customer_token", response.json())
+        self.assertEqual(response.json()["customer"]["email"], "buy@test.com")
+
+    def test_login_with_wrong_password_is_rejected(self):
+        response = self.portal_client().post(
+            "/api/portal/login", {"email": "buy@test.com", "password": "wrong"}, format="json"
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_login_for_customer_with_no_password_set_is_rejected(self):
+        response = self.portal_client().post(
+            "/api/portal/login",
+            {"email": self.other_customer.email, "password": "anything"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def _login_token(self):
+        response = self.portal_client().post(
+            "/api/portal/login", {"email": "buy@test.com", "password": "hunter2pass"}, format="json"
+        )
+        return response.json()["customer_token"]
+
+    def test_my_quotations_lists_only_this_customers_shareable_quotes(self):
+        mine_approved = self.make_quotation(status=Quotation.APPROVED)
+        mine_draft = self.make_quotation(status=Quotation.DRAFT)
+        someone_elses = self.make_quotation(customer=self.other_customer, status=Quotation.APPROVED)
+
+        token = self._login_token()
+        response = self.portal_client().get(f"/api/portal/me/quotations/{token}")
+        self.assertEqual(response.status_code, 200)
+        numbers = {q["number"] for q in response.json()["quotations"]}
+
+        self.assertIn(mine_approved.number, numbers)
+        self.assertNotIn(mine_draft.number, numbers)  # not submitted yet — not theirs to see
+        self.assertNotIn(someone_elses.number, numbers)  # a different customer entirely
+
+    def test_open_quotation_mints_a_working_single_quotation_session(self):
+        quotation = self.make_quotation(status=Quotation.APPROVED)
+        token = self._login_token()
+
+        response = self.portal_client().post(
+            f"/api/portal/me/quotations/{token}/{quotation.id}/open"
+        )
+        self.assertEqual(response.status_code, 201)
+        quotation_token = response.json()["token"]
+
+        # The minted token opens the exact same detail screen a magic link would.
+        detail = self.portal_client().get(f"/api/portal/quotations/{quotation_token}")
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.json()["quotation"]["number"], quotation.number)
+
+    def test_cannot_open_a_quotation_belonging_to_someone_else(self):
+        someone_elses = self.make_quotation(customer=self.other_customer, status=Quotation.APPROVED)
+        token = self._login_token()
+
+        response = self.portal_client().post(
+            f"/api/portal/me/quotations/{token}/{someone_elses.id}/open"
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_garbage_customer_token_is_rejected(self):
+        response = self.portal_client().get("/api/portal/me/quotations/not-a-real-token")
+        self.assertEqual(response.status_code, 401)

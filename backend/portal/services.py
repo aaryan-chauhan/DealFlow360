@@ -11,16 +11,21 @@ the same security story:
 """
 
 import hashlib
+import logging
 from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
 from django.core import signing
+from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 
+logger = logging.getLogger(__name__)
+
 from approvals.services import route_quotation
 from audit_log.models import record
+from accounts.models import Customer
 from pricing_discounts import services as risk
 from quotations.models import Quotation
 
@@ -29,6 +34,11 @@ from .models import NegotiationMessage, PortalSession
 # Namespaces the HMAC so a portal token can never be mistaken for — or forged from — any
 # other signed value this project produces.
 TOKEN_SALT = "dealflow360.portal.session"
+# A distinct salt for the customer-login credential (below) — it is a different kind of
+# token (customer-scoped, not quotation-scoped) and must never verify against the wrong
+# salt just because both are HMAC-signed with `django.core.signing`.
+CUSTOMER_TOKEN_SALT = "dealflow360.portal.customer_login"
+CUSTOMER_TOKEN_TTL = timedelta(hours=24)
 
 # The portal can be opened while the quote is live; a confirmed quote is read-only, and a
 # draft has not been through governance so it is never shareable.
@@ -159,6 +169,77 @@ def resolve_token(raw_token, touch=True):
         session.last_used_at = timezone.now()
         session.save(update_fields=["last_used_at", "updated_at"])
     return session
+
+
+def authenticate_customer(email, raw_password):
+    """Email+password login (spec A1) — a second, independent entry point alongside the
+    rep-issued magic link, for a customer who wants to see all of their own quotations
+    rather than open one specific link. Returns the matching `Customer` or raises
+    `PortalAccessDenied`. A customer's email is only unique *per company* (§5.1), so the
+    same address can plausibly belong to a `Customer` row at more than one company —
+    each candidate's own password decides which (if any) actually matches, rather than
+    guessing from the email alone.
+    """
+    email = (email or "").strip()
+    generic = PortalAccessDenied("Invalid email or password.", code="invalid_credentials")
+    if not email or not raw_password:
+        raise generic
+    candidates = Customer.objects.filter(email__iexact=email).exclude(password_hash="")
+    for candidate in candidates:
+        if candidate.check_password(raw_password):
+            return candidate
+    raise generic
+
+
+def issue_customer_token(customer):
+    """A short-lived, customer-scoped credential — never a workspace token, and never
+    tied to one quotation the way a magic link is. It only ever proves "this is customer
+    X"; every view that accepts it re-derives what that customer may see from
+    `customer_id` alone, so it can list and open only that customer's own deals (§12).
+    """
+    return signing.dumps({"cid": str(customer.id)}, salt=CUSTOMER_TOKEN_SALT)
+
+
+def resolve_customer_token(raw_token):
+    if not raw_token:
+        raise PortalAccessDenied("Please log in again.", code="expired_login")
+    try:
+        payload = signing.loads(
+            raw_token, salt=CUSTOMER_TOKEN_SALT, max_age=CUSTOMER_TOKEN_TTL.total_seconds()
+        )
+    except signing.BadSignature:
+        raise PortalAccessDenied("Your session has expired. Please log in again.", code="expired_login")
+    customer = Customer.objects.filter(pk=payload.get("cid")).select_related("company").first()
+    if customer is None:
+        raise PortalAccessDenied("Your session has expired. Please log in again.", code="expired_login")
+    return customer
+
+
+def list_customer_quotations(customer):
+    """The "My Quotations" list (§1, §9 Screen 11's portal nav) — only ever this
+    customer's own deals, and only those far enough along to mean anything to them; a
+    draft the rep hasn't submitted yet is internal work in progress, not theirs to see.
+    """
+    return (
+        Quotation.objects.filter(customer=customer, status__in=SHAREABLE_STATUSES)
+        .select_related("company")
+        .order_by("-updated_at")
+    )
+
+
+def open_quotation_session(customer, quotation_id):
+    """Mints an ordinary single-quotation `PortalSession` for a quotation the logged-in
+    customer already owns, reusing `issue_session` unchanged — the resulting token opens
+    the exact same detail/negotiation screen a rep-sent magic link does, so every rule
+    already enforced there (scope, actionable statuses, the re-approval loop) applies
+    without having to be re-taught to a second code path.
+    """
+    quotation = Quotation.objects.filter(
+        pk=quotation_id, customer=customer, status__in=SHAREABLE_STATUSES
+    ).first()
+    if quotation is None:
+        raise PortalAccessDenied("That quotation was not found.", code="scope_mismatch")
+    return issue_session(quotation, actor=None)
 
 
 def assert_scope(session, quotation_id):
@@ -411,3 +492,34 @@ def portal_url(raw_token, base_url=None):
     """
     base = (base_url or getattr(settings, "PORTAL_BASE_URL", "") or "").rstrip("/")
     return f"{base}/portal/quotations/{raw_token}"
+
+
+def send_portal_link_email(quotation, url):
+    """Emails the magic link to the customer's real inbox (spec A1) rather than leaving
+    delivery entirely to the rep copy-pasting it. Never raises: with no SMTP configured
+    this "sends" via Django's console backend (logged, not delivered), and a real send
+    failure is logged rather than turned into a 500 on an otherwise-successful link mint —
+    the rep still has the URL on screen to copy by hand either way.
+    """
+    customer = quotation.customer
+    if not customer.email:
+        return False
+    try:
+        send_mail(
+            subject=f"Your quotation {quotation.number} from {quotation.company.name}",
+            message=(
+                f"Hi {customer.name},\n\n"
+                f"{quotation.owner.full_name or quotation.owner.email} shared quotation "
+                f"{quotation.number} with you. Review it, ask questions, or negotiate "
+                f"terms here:\n\n{url}\n\n"
+                f"This link is private to you and expires "
+                f"{int(settings.PORTAL_TOKEN_TTL_HOURS)} hours after it was issued."
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[customer.email],
+            fail_silently=False,
+        )
+        return True
+    except Exception:
+        logger.exception("Failed to email portal link for quotation %s", quotation.id)
+        return False

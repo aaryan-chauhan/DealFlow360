@@ -19,6 +19,8 @@ from .serializers import (
     CommentInputSerializer,
     ConfirmInputSerializer,
     CounterOfferInputSerializer,
+    CustomerLoginSerializer,
+    CustomerQuotationSummarySerializer,
     NegotiationMessageSerializer,
     PortalQuotationSerializer,
 )
@@ -27,8 +29,13 @@ from .services import (
     apply_counter_offer,
     assert_actionable,
     assert_scope,
+    authenticate_customer,
     confirm_quotation,
+    issue_customer_token,
+    list_customer_quotations,
+    open_quotation_session,
     post_comment,
+    resolve_customer_token,
     resolve_token,
 )
 
@@ -175,3 +182,53 @@ class PortalConfirmView(PortalBaseView):
             ),
             status=status.HTTP_200_OK,
         )
+
+
+class PortalLoginView(PortalBaseView):
+    """POST /api/portal/login — the customer's second entry point (spec A1) alongside a
+    rep-issued magic link: email + password, in exchange for a customer-scoped token that
+    can list and open this customer's own quotations. Never a `User`, never JWT, never
+    workspace-wide — see the module docstring in `services.py`."""
+
+    def post(self, request):
+        serializer = CustomerLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        customer = authenticate_customer(
+            serializer.validated_data["email"], serializer.validated_data["password"]
+        )
+        return Response(
+            {
+                "customer_token": issue_customer_token(customer),
+                "customer": {"name": customer.name, "email": customer.email},
+            }
+        )
+
+
+class PortalMyQuotationsView(PortalBaseView):
+    """GET /api/portal/me/quotations/{customer_token} — "My Quotations" (§1, §9)."""
+
+    def get(self, request, token):
+        customer = resolve_customer_token(token)
+        quotations = list_customer_quotations(customer)
+        return Response(
+            {
+                "customer": {"name": customer.name, "email": customer.email},
+                "quotations": CustomerQuotationSummarySerializer(quotations, many=True).data,
+            }
+        )
+
+
+class PortalOpenQuotationView(PortalBaseView):
+    """POST /api/portal/me/quotations/{customer_token}/{quotation_id}/open
+
+    Mints an ordinary single-quotation session for one of the logged-in customer's own
+    deals and hands back its token — the caller then simply opens
+    `/portal/quotations/{token}` exactly as it would for a rep-sent magic link, so the
+    entire negotiation screen is reused unchanged rather than re-implemented for this
+    second entry point.
+    """
+
+    def post(self, request, token, quotation_id):
+        customer = resolve_customer_token(token)
+        session, raw_token = open_quotation_session(customer, quotation_id)
+        return Response({"token": raw_token}, status=status.HTTP_201_CREATED)

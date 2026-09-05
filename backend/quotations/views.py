@@ -142,7 +142,7 @@ class QuotationViewSet(QuotationScopedMixin, viewsets.ModelViewSet):
         never stored, so re-sending a link always means issuing a fresh one.
         """
         from portal.serializers import PortalSessionSerializer
-        from portal.services import issue_session, portal_url
+        from portal.services import issue_session, portal_url, send_portal_link_email
 
         quotation = self.get_object()
         self.assert_owned_or_privileged(quotation, "send")
@@ -155,10 +155,13 @@ class QuotationViewSet(QuotationScopedMixin, viewsets.ModelViewSet):
         # An explicit setting wins; otherwise the link is built from the origin the rep is
         # actually using, so a LAN address produces a LAN-reachable link.
         base_url = settings.PORTAL_BASE_URL or request.headers.get("Origin") or ""
+        url = portal_url(raw_token, base_url)
+        emailed = send_portal_link_email(quotation, url)
         return Response(
             {
                 "token": raw_token,
-                "portal_url": portal_url(raw_token, base_url),
+                "portal_url": url,
+                "emailed": emailed,
                 "session": PortalSessionSerializer(session).data,
             },
             status=status.HTTP_201_CREATED,

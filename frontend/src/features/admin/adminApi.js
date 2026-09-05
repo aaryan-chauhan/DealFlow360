@@ -54,25 +54,6 @@ export const adminApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['SubscriptionPlans'],
     }),
-    getUpsellRules: builder.query({
-      query: () => '/upsell-rules',
-      providesTags: ['UpsellRules'],
-    }),
-    createUpsellRule: builder.mutation({
-      query: (body) => ({
-        url: '/upsell-rules',
-        method: 'POST',
-        body,
-      }),
-      invalidatesTags: ['UpsellRules'],
-    }),
-    deleteUpsellRule: builder.mutation({
-      query: (id) => ({
-        url: `/upsell-rules/${id}`,
-        method: 'DELETE',
-      }),
-      invalidatesTags: ['UpsellRules'],
-    }),
   }),
 })
 
@@ -85,8 +66,5 @@ export const {
   useGetSubscriptionPlansQuery,
   useCreateSubscriptionPlanMutation,
   useUpdateSubscriptionPlanMutation,
-  useGetUpsellRulesQuery,
-  useCreateUpsellRuleMutation,
-  useDeleteUpsellRuleMutation,
 } = adminApi
 

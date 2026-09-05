@@ -1,41 +1,76 @@
 import { useState } from 'react'
-import { useGetReportingSummaryQuery } from './reportingApi'
+import { useSelector } from 'react-redux'
+
+import { selectAccessToken } from '../../auth/authSlice'
+import { useGetProductsQuery } from '../admin/catalogApi'
+import { downloadReport, useGetReportingSummaryQuery } from './reportingApi'
+
+const PERIODS = [
+  { value: 'today', label: 'Today' },
+  { value: 'week', label: 'This Week' },
+  { value: '30d', label: 'Last 30 Days' },
+  { value: '90d', label: 'Last 90 Days' },
+  { value: 'all', label: 'All Time' },
+  { value: 'custom', label: 'Custom Range' },
+]
+
+// Mirrors catalog.Product.CATEGORY_CHOICES (backend/catalog/models.py) — kept as a
+// literal list rather than a live lookup since these four are fixed enum values.
+const CATEGORIES = ['Hardware', 'Software', 'Services', 'Subscription']
+
+const APPROVAL_STATUSES = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'pending_approval', label: 'Pending Approval' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'negotiation', label: 'Negotiation' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'rejected', label: 'Rejected' },
+]
 
 export default function ReportingPage() {
-  const [dateRange, setDateRange] = useState('30d')
+  const token = useSelector(selectAccessToken)
+  const [period, setPeriod] = useState('30d')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [salesRep, setSalesRep] = useState('')
+  const [approvalStatus, setApprovalStatus] = useState('')
+  const [category, setCategory] = useState('')
+  const [product, setProduct] = useState('')
+  const [isExporting, setIsExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
 
-  const { data, isLoading } = useGetReportingSummaryQuery({
-    date_range: dateRange,
+  const filters = {
+    period,
+    date_from: period === 'custom' ? dateFrom || undefined : undefined,
+    date_to: period === 'custom' ? dateTo || undefined : undefined,
     sales_rep: salesRep || undefined,
-  })
+    approval_status: approvalStatus || undefined,
+    category: category || undefined,
+    product: product || undefined,
+  }
 
-  function handleExportCSV() {
-    const token = localStorage.getItem('token')
-    const url = `/api/reports/export?sales_rep=${encodeURIComponent(salesRep)}`
-    
-    // Create an anchor tag to trigger download with auth
-    fetch(url, {
-      headers: {
-        Authorization: token ? `Bearer ${token}` : '',
-      },
-    })
-      .then((res) => res.blob())
-      .then((blob) => {
-        const downloadUrl = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = downloadUrl
-        a.download = 'dealflow_sales_report.csv'
-        document.body.appendChild(a)
-        a.click()
-        a.remove()
-      })
-      .catch(() => alert('Failed to download report export.'))
+  const { data, isLoading } = useGetReportingSummaryQuery(filters)
+  // Fetched unfiltered by rep so the rep dropdown always lists everyone with report
+  // activity, even while a rep filter narrows the summary itself.
+  const { data: unfilteredData } = useGetReportingSummaryQuery({})
+  const { data: products = [] } = useGetProductsQuery()
+
+  async function handleExport(format) {
+    setExportError('')
+    setIsExporting(true)
+    try {
+      await downloadReport(token, { format, ...filters })
+    } catch {
+      setExportError(`Failed to export ${format.toUpperCase()} report.`)
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   const summary = data?.summary || {}
   const topSkus = data?.top_skus || []
   const leaderboard = data?.rep_leaderboard || []
+  const repOptions = unfilteredData?.rep_leaderboard || []
 
   return (
     <div className="space-y-6">
@@ -44,34 +79,141 @@ export default function ReportingPage() {
         <div>
           <h1 className="text-xl font-bold text-slate-900">Reporting & Analytics Dashboard</h1>
           <p className="text-xs text-slate-500">
-            Executive sales KPIs, margin distributions, top selling products, and CSV data export (§7.5)
+            Executive sales KPIs, margin distributions, top selling products, and PDF/XLS export (§7.5)
           </p>
         </div>
 
-        <button
-          onClick={handleExportCSV}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 shadow transition"
-        >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          Export CSV Report
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleExport('xls')}
+            disabled={isExporting}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 shadow transition disabled:opacity-50"
+          >
+            {isExporting ? 'Exporting…' : 'Export XLS'}
+          </button>
+          <button
+            onClick={() => handleExport('pdf')}
+            disabled={isExporting}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 shadow transition disabled:opacity-50"
+          >
+            {isExporting ? 'Exporting…' : 'Export PDF'}
+          </button>
+        </div>
       </div>
 
-      {/* Toolbar Filter */}
-      <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Date Range:</span>
+      {exportError && (
+        <div className="rounded-xl bg-rose-50 border border-rose-200 p-3.5 text-xs text-rose-800 font-medium">
+          {exportError}
+        </div>
+      )}
+
+      {/* Filter Toolbar */}
+      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+            Period
+          </label>
           <select
-            value={dateRange}
-            onChange={(e) => setDateRange(e.target.value)}
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
             className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs outline-none focus:border-brand-600 focus:bg-white"
           >
-            <option value="7d">Last 7 Days</option>
-            <option value="30d">Last 30 Days</option>
-            <option value="90d">Last 90 Days</option>
-            <option value="all">All Time</option>
+            {PERIODS.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {period === 'custom' && (
+          <>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                From
+              </label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs outline-none focus:border-brand-600 focus:bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                To
+              </label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs outline-none focus:border-brand-600 focus:bg-white"
+              />
+            </div>
+          </>
+        )}
+
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+            Sales Rep
+          </label>
+          <select
+            value={salesRep}
+            onChange={(e) => setSalesRep(e.target.value)}
+            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs outline-none focus:border-brand-600 focus:bg-white"
+          >
+            <option value="">All Reps</option>
+            {repOptions.map((r) => (
+              <option key={r.rep_id} value={r.rep_id}>{r.rep_name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+            Approval Status
+          </label>
+          <select
+            value={approvalStatus}
+            onChange={(e) => setApprovalStatus(e.target.value)}
+            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs outline-none focus:border-brand-600 focus:bg-white"
+          >
+            <option value="">All Statuses</option>
+            {APPROVAL_STATUSES.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+            Category
+          </label>
+          <select
+            value={category}
+            onChange={(e) => { setCategory(e.target.value); setProduct('') }}
+            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs outline-none focus:border-brand-600 focus:bg-white"
+          >
+            <option value="">All Categories</option>
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+            Product
+          </label>
+          <select
+            value={product}
+            onChange={(e) => setProduct(e.target.value)}
+            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs outline-none focus:border-brand-600 focus:bg-white"
+          >
+            <option value="">All Products</option>
+            {products
+              .filter((p) => !category || p.category === category)
+              .map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
           </select>
         </div>
       </div>
@@ -121,12 +263,12 @@ export default function ReportingPage() {
             </div>
           </div>
 
-          {/* Tables Section: Top SKUs & Rep Leaderboard */}
+          {/* Tables Section: Top Products & Rep Leaderboard */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Top Selling Products */}
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 className="text-sm font-bold text-slate-900">Top Selling SKUs</h3>
+                <h3 className="text-sm font-bold text-slate-900">Top Selling Products</h3>
                 <span className="text-xs text-slate-400">By Revenue</span>
               </div>
               <div className="overflow-x-auto">
@@ -134,7 +276,6 @@ export default function ReportingPage() {
                   <thead className="bg-slate-50 font-semibold uppercase text-slate-500">
                     <tr>
                       <th className="px-3 py-2">Product Name</th>
-                      <th className="px-3 py-2">SKU</th>
                       <th className="px-3 py-2 text-right">Units Sold</th>
                       <th className="px-3 py-2 text-right">Total Revenue</th>
                     </tr>
@@ -142,15 +283,14 @@ export default function ReportingPage() {
                   <tbody className="divide-y divide-slate-100">
                     {topSkus.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-3 py-4 text-center text-slate-400">
+                        <td colSpan={3} className="px-3 py-4 text-center text-slate-400">
                           No product sales recorded yet.
                         </td>
                       </tr>
                     )}
-                    {topSkus.map((sku, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/50">
+                    {topSkus.map((sku) => (
+                      <tr key={sku.sku} className="hover:bg-slate-50/50">
                         <td className="px-3 py-2.5 font-semibold text-slate-900">{sku.product_name}</td>
-                        <td className="px-3 py-2.5 text-slate-500 font-mono">{sku.sku}</td>
                         <td className="px-3 py-2.5 text-right font-medium text-slate-800">{sku.quantity}</td>
                         <td className="px-3 py-2.5 text-right font-bold text-brand-600">
                           ₹{sku.sales_amount.toLocaleString('en-IN')}
@@ -185,8 +325,8 @@ export default function ReportingPage() {
                         </td>
                       </tr>
                     )}
-                    {leaderboard.map((rep, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/50">
+                    {leaderboard.map((rep) => (
+                      <tr key={rep.rep_id} className="hover:bg-slate-50/50">
                         <td className="px-3 py-2.5 font-semibold text-slate-900">{rep.rep_name}</td>
                         <td className="px-3 py-2.5 text-center font-medium text-slate-700">{rep.quote_count}</td>
                         <td className="px-3 py-2.5 text-right font-bold text-slate-900">

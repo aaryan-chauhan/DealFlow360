@@ -7,7 +7,6 @@ import { selectIsAuthenticated } from '../auth/authSlice'
 import DiscountConfigPage from '../features/admin/DiscountConfigPage'
 import ProductsPage from '../features/admin/ProductsPage'
 import SubscriptionPlansPage from '../features/admin/SubscriptionPlansPage'
-import UpsellRulesPage from '../features/admin/UpsellRulesPage'
 import WarehousesPage from '../features/admin/WarehousesPage'
 import ApprovalDetailPage from '../features/approvals/ApprovalDetailPage'
 
@@ -136,14 +135,6 @@ export default function App() {
           element={
             <PrivateRoute roles={['admin', 'finance_ops']}>
               <SubscriptionPlansPage />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/admin/upsell-rules"
-          element={
-            <PrivateRoute roles={['admin', 'sales_manager']}>
-              <UpsellRulesPage />
             </PrivateRoute>
           }
         />
