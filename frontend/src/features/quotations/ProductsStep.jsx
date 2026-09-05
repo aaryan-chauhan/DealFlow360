@@ -63,7 +63,8 @@ export default function ProductsStep({ quotationId, lines }) {
     category === 'All Products' ? products : products.filter((p) => p.category === category)
   // Quantity already on the quotation, per product. `lines` comes straight from the
   // server, so after an Add it reflects the merged total rather than this screen's guess.
-  const onQuote = Object.fromEntries(lines.map((line) => [line.product, parseFloat(line.qty)]))
+  const safeLines = lines || []
+  const onQuote = Object.fromEntries(safeLines.map((line) => [line.product, parseFloat(line.qty || 0)]))
 
   async function handleAdd(product) {
     const qty = quantities[product.id] ?? 1

@@ -1,10 +1,17 @@
 from django.urls import path
 from rest_framework.routers import SimpleRouter
 
-from .views import FulfillmentViewSet, ReplenishmentScanView
+from .views import (
+    FulfillmentViewSet,
+    ReplenishmentScanView,
+    StockLevelAdminViewSet,
+    WarehouseAdminViewSet,
+)
 
 router = SimpleRouter(trailing_slash=False)
 router.register("fulfillment", FulfillmentViewSet, basename="fulfillment")
+router.register("warehouses", WarehouseAdminViewSet, basename="warehouse")
+router.register("stock-levels", StockLevelAdminViewSet, basename="stock-level")
 
 # §8 puts the list on /api/fulfillment/orders but the detail on /api/fulfillment/{id}.
 # The literal routes are declared first, and the viewset pins its lookup to a UUID, so
@@ -22,3 +29,4 @@ urlpatterns = [
     ),
     *router.urls,
 ]
+

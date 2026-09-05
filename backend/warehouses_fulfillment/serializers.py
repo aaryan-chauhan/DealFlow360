@@ -20,6 +20,27 @@ class WarehouseSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "shipping_cost_weight", "replenishment_rule"]
 
 
+class StockLevelSerializer(serializers.ModelSerializer):
+    warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_category = serializers.CharField(source="product.category", read_only=True)
+
+    class Meta:
+        model = StockLevel
+        fields = [
+            "id",
+            "warehouse",
+            "warehouse_name",
+            "product",
+            "product_name",
+            "product_category",
+            "qty_on_hand",
+            "qty_reserved",
+            "qty_available",
+        ]
+
+
+
 class SplitLineSerializer(serializers.ModelSerializer):
     warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)

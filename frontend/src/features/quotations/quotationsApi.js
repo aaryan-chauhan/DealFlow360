@@ -13,6 +13,16 @@ export const quotationsApi = apiSlice.injectEndpoints({
     createQuotation: builder.mutation({
       query: (body) => ({ url: '/quotations', method: 'POST', body }),
       invalidatesTags: ['Quotation'],
+      async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+        try {
+          const { data: created } = await queryFulfilled
+          dispatch(
+            quotationsApi.util.upsertQueryData('getQuotation', created.id, created)
+          )
+        } catch {
+          /* ignore error */
+        }
+      },
     }),
     addLine: builder.mutation({
       query: ({ quotationId, ...body }) => ({
@@ -77,6 +87,28 @@ export const quotationsApi = apiSlice.injectEndpoints({
       query: (body) => ({ url: '/customers', method: 'POST', body }),
       invalidatesTags: ['Customer'],
     }),
+    getSuggestions: builder.query({
+      query: (id) => `/quotations/${id}/suggestions`,
+      providesTags: (r, e, id) => [{ type: 'Quotation', id }, 'Suggestions'],
+    }),
+    addSuggestion: builder.mutation({
+      query: ({ quotationId, suggestionId }) => ({
+        url: `/quotations/${quotationId}/suggestions/${suggestionId}/add`,
+        method: 'POST',
+      }),
+      invalidatesTags: (r, e, { quotationId }) => [
+        { type: 'Quotation', id: quotationId },
+        'Quotation',
+        'Suggestions',
+      ],
+    }),
+    dismissSuggestion: builder.mutation({
+      query: ({ quotationId, suggestionId }) => ({
+        url: `/quotations/${quotationId}/suggestions/${suggestionId}/dismiss`,
+        method: 'POST',
+      }),
+      invalidatesTags: (r, e, { quotationId }) => [{ type: 'Quotation', id: quotationId }, 'Suggestions'],
+    }),
   }),
 })
 
@@ -92,4 +124,8 @@ export const {
   useReplyToNegotiationMutation,
   useGetCustomersQuery,
   useCreateCustomerMutation,
+  useGetSuggestionsQuery,
+  useAddSuggestionMutation,
+  useDismissSuggestionMutation,
 } = quotationsApi
+

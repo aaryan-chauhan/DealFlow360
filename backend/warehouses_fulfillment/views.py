@@ -15,7 +15,10 @@ from .serializers import (
     FulfillmentOrderListSerializer,
     NotifySerializer,
     OverrideSerializer,
+    StockLevelSerializer,
+    WarehouseSerializer,
 )
+
 from .services import (
     accept_split,
     consolidate_backorder,
@@ -170,3 +173,62 @@ class ReplenishmentScanView(APIView):
                 ],
             }
         )
+
+
+class WarehouseAdminViewSet(viewsets.ModelViewSet):
+    """Admin CRUD for warehouses."""
+
+    permission_classes = [IsCompanyMember]
+    serializer_class = WarehouseSerializer
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    @property
+    def membership(self):
+        membership = get_membership(self.request)
+        if membership is None:
+            raise PermissionDenied("No company membership.")
+        return membership
+
+    def get_queryset(self):
+        return Warehouse.objects.filter(company=self.membership.company)
+
+    def perform_create(self, serializer):
+        if self.membership.role.code not in MANAGE_ROLES:
+            raise PermissionDenied("Only Admin or Finance can manage warehouses.")
+        serializer.save(company=self.membership.company)
+
+    def perform_update(self, serializer):
+        if self.membership.role.code not in MANAGE_ROLES:
+            raise PermissionDenied("Only Admin or Finance can update warehouses.")
+        serializer.save()
+
+
+class StockLevelAdminViewSet(viewsets.ModelViewSet):
+    """Admin endpoint to view and adjust stock levels."""
+
+    permission_classes = [IsCompanyMember]
+    serializer_class = StockLevelSerializer
+    http_method_names = ["get", "patch", "head", "options"]
+
+    @property
+    def membership(self):
+        membership = get_membership(self.request)
+        if membership is None:
+            raise PermissionDenied("No company membership.")
+        return membership
+
+    def get_queryset(self):
+        qs = StockLevel.objects.filter(warehouse__company=self.membership.company).select_related("warehouse", "product")
+        warehouse_id = self.request.query_params.get("warehouse")
+        if warehouse_id:
+            qs = qs.filter(warehouse_id=warehouse_id)
+        product_id = self.request.query_params.get("product")
+        if product_id:
+            qs = qs.filter(product_id=product_id)
+        return qs
+
+    def perform_update(self, serializer):
+        if self.membership.role.code not in MANAGE_ROLES:
+            raise PermissionDenied("Only Admin or Finance can update stock levels.")
+        serializer.save()
+

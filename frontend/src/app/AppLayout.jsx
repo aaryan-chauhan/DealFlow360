@@ -23,6 +23,8 @@ const icons = {
 // switch these on one at a time.
 const NAV = [
   { label: 'Dashboard', to: '/dashboard', icon: 'dashboard' },
+  { label: 'Deal Health', to: '/deal-health', icon: 'reports' },
+  { label: 'Reports', to: '/reports', icon: 'reports' },
   { label: 'Quotations', to: '/quotations', icon: 'quotations' },
   {
     label: 'Approvals',
@@ -36,7 +38,12 @@ const NAV = [
     icon: 'orders',
     roles: ['finance_ops', 'admin', 'sales_manager'],
   },
-  { label: 'Customers', icon: 'customers' },
+  {
+    label: 'Warehouses',
+    to: '/admin/warehouses',
+    icon: 'orders',
+    roles: ['admin', 'finance_ops', 'sales_manager'],
+  },
   { label: 'Products', to: '/admin/products', icon: 'products', roles: ['admin'] },
   {
     label: 'Discount Config',
@@ -44,12 +51,17 @@ const NAV = [
     icon: 'discounts',
     roles: ['admin', 'sales_manager'],
   },
-  { label: 'Orders', icon: 'orders' },
+  {
+    label: 'Upsell Rules',
+    to: '/admin/upsell-rules',
+    icon: 'discounts',
+    roles: ['admin', 'sales_manager'],
+  },
   { label: 'Invoices', to: '/invoices', icon: 'invoices' },
+
   { label: 'Subscriptions', to: '/subscriptions', icon: 'subscriptions' },
-  { label: 'Reports', icon: 'reports' },
-  { label: 'Settings', icon: 'settings' },
 ]
+
 
 function NavIcon({ name }) {
   return (

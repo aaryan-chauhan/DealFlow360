@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { parseApiError } from '../../shared/api/errors'
+import { ErrorBoundary } from '../../shared/ui/ErrorBoundary'
 import CustomerStep from './CustomerStep'
 import ProductsStep from './ProductsStep'
 import ReviewStep from './ReviewStep'
@@ -108,7 +109,7 @@ function Builder({ id }) {
   const [customer, setCustomer] = useState(null)
   const [submitResult, setSubmitResult] = useState(null)
 
-  const { data: quotation, isLoading } = useGetQuotationQuery(id, { skip: isNew })
+  const { data: quotation, isLoading, isError, refetch } = useGetQuotationQuery(id, { skip: isNew })
   const [createQuotation, { isLoading: isCreating, error: createError }] =
     useCreateQuotationMutation()
   const [submitForApproval, { isLoading: isSubmitting, error: submitError }] =
@@ -118,9 +119,13 @@ function Builder({ id }) {
 
   // An empty draft has nothing to review — land the rep on the product picker instead.
   useEffect(() => {
-    if (landed.current || !quotation) return
-    landed.current = true
-    if (quotation.status === 'draft' && quotation.lines.length === 0) setStep(1)
+    if (!quotation) return
+    if (!landed.current) {
+      landed.current = true
+      if (quotation.status === 'draft' && (!quotation.lines || quotation.lines.length === 0)) {
+        setStep(1)
+      }
+    }
   }, [quotation])
 
   async function handleContinueFromCustomer() {
@@ -143,10 +148,30 @@ function Builder({ id }) {
     }
   }
 
-  if (!isNew && isLoading) {
-    return <p className="text-sm text-slate-500">Loading quotation…</p>
+  if (!isNew && isError) {
+    return (
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center space-y-3">
+        <p className="text-sm font-semibold text-rose-800">Failed to load quotation details.</p>
+        <button
+          onClick={() => refetch()}
+          className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-500"
+        >
+          Retry
+        </button>
+      </div>
+    )
   }
 
+  if (!isNew && (isLoading || !quotation)) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+        Loading quotation details…
+      </div>
+    )
+  }
+
+  const isDraftEmpty = quotation && quotation.status === 'draft' && (!quotation.lines || quotation.lines.length === 0)
+  const activeStep = (isDraftEmpty && step === 2) ? 1 : step
   const editable = quotation?.can_edit ?? true
 
   return (
@@ -168,10 +193,10 @@ function Builder({ id }) {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-5">
-        <Stepper current={step} />
+        <Stepper current={activeStep} />
       </div>
 
-      {step === 0 && (
+      {activeStep === 0 && (
         <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
           <CustomerStep
             selectedId={customer?.id}
@@ -190,13 +215,13 @@ function Builder({ id }) {
         </div>
       )}
 
-      {step === 1 && quotation && (
+      {activeStep === 1 && quotation && (
         <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
           <ProductsStep quotationId={quotation.id} lines={quotation.lines} />
           <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
             <button
               onClick={() => setStep(2)}
-              disabled={quotation.lines.length === 0}
+              disabled={!quotation.lines || quotation.lines.length === 0}
               className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
             >
               Continue to Review
@@ -205,7 +230,7 @@ function Builder({ id }) {
         </div>
       )}
 
-      {step === 2 && quotation && (
+      {activeStep === 2 && quotation && (
         <ReviewStep
           quotation={quotation}
           editable={editable}
@@ -216,7 +241,7 @@ function Builder({ id }) {
         />
       )}
 
-      {step === 3 && submitResult && (
+      {activeStep === 3 && submitResult && (
         <SubmitOutcome result={submitResult} quotation={submitResult.quotation} />
       )}
     </div>
@@ -227,5 +252,9 @@ function Builder({ id }) {
  *  instead of leaving it stuck on the previous quote's step. */
 export default function QuotationBuilderPage() {
   const { id } = useParams()
-  return <Builder key={id ?? 'new'} id={id} />
+  return (
+    <ErrorBoundary key={id ?? 'new'}>
+      <Builder key={id ?? 'new'} id={id} />
+    </ErrorBoundary>
+  )
 }

@@ -6,8 +6,13 @@ import SignupPage from '../auth/SignupPage'
 import { selectIsAuthenticated } from '../auth/authSlice'
 import DiscountConfigPage from '../features/admin/DiscountConfigPage'
 import ProductsPage from '../features/admin/ProductsPage'
+import SubscriptionPlansPage from '../features/admin/SubscriptionPlansPage'
+import UpsellRulesPage from '../features/admin/UpsellRulesPage'
+import WarehousesPage from '../features/admin/WarehousesPage'
 import ApprovalDetailPage from '../features/approvals/ApprovalDetailPage'
+
 import ApprovalsListPage from '../features/approvals/ApprovalsListPage'
+import DashboardPage from '../features/dashboard/DashboardPage'
 import FulfillmentDetailPage from '../features/fulfillment/FulfillmentDetailPage'
 import FulfillmentListPage from '../features/fulfillment/FulfillmentListPage'
 import InvoiceDetailPage from '../features/invoices/InvoiceDetailPage'
@@ -16,9 +21,10 @@ import QuotationBuilderPage from '../features/quotations/QuotationBuilderPage'
 import QuotationsListPage from '../features/quotations/QuotationsListPage'
 import BillingDetailPage from '../features/subscriptions/BillingDetailPage'
 import SubscriptionsListPage from '../features/subscriptions/SubscriptionsListPage'
+import DealHealthPage from '../features/dealHealth/DealHealthPage'
+import ReportingPage from '../features/reporting/ReportingPage'
 import PrivateRoute from '../routes/PrivateRoute'
 import AppLayout from './AppLayout'
-import SessionPlaceholder from './SessionPlaceholder'
 
 function PublicOnly({ children }) {
   const isAuthenticated = useSelector(selectIsAuthenticated)
@@ -52,7 +58,9 @@ export default function App() {
           </PrivateRoute>
         }
       >
-        <Route path="/dashboard" element={<SessionPlaceholder />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/deal-health" element={<DealHealthPage />} />
+        <Route path="/reports" element={<ReportingPage />} />
         <Route path="/quotations" element={<QuotationsListPage />} />
         <Route path="/quotations/new" element={<QuotationBuilderPage />} />
         <Route path="/quotations/:id" element={<QuotationBuilderPage />} />
@@ -108,9 +116,35 @@ export default function App() {
             </PrivateRoute>
           }
         />
+        <Route
+          path="/admin/warehouses"
+          element={
+            <PrivateRoute roles={['admin', 'finance_ops', 'sales_manager']}>
+              <WarehousesPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin/subscription-plans"
+          element={
+            <PrivateRoute roles={['admin', 'finance_ops']}>
+              <SubscriptionPlansPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin/upsell-rules"
+          element={
+            <PrivateRoute roles={['admin', 'sales_manager']}>
+              <UpsellRulesPage />
+            </PrivateRoute>
+          }
+        />
       </Route>
+
 
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   )
 }
+

@@ -47,7 +47,11 @@ INSTALLED_APPS = [
     "invoicing_payments",
     "portal",
     "audit_log",
+    "upsell",
+    "deal_health",
+    "reporting",
 ]
+
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
