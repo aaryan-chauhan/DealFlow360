@@ -10,8 +10,12 @@ import ApprovalDetailPage from '../features/approvals/ApprovalDetailPage'
 import ApprovalsListPage from '../features/approvals/ApprovalsListPage'
 import FulfillmentDetailPage from '../features/fulfillment/FulfillmentDetailPage'
 import FulfillmentListPage from '../features/fulfillment/FulfillmentListPage'
+import InvoiceDetailPage from '../features/invoices/InvoiceDetailPage'
+import InvoicesListPage from '../features/invoices/InvoicesListPage'
 import QuotationBuilderPage from '../features/quotations/QuotationBuilderPage'
 import QuotationsListPage from '../features/quotations/QuotationsListPage'
+import BillingDetailPage from '../features/subscriptions/BillingDetailPage'
+import SubscriptionsListPage from '../features/subscriptions/SubscriptionsListPage'
 import PrivateRoute from '../routes/PrivateRoute'
 import AppLayout from './AppLayout'
 import SessionPlaceholder from './SessionPlaceholder'
@@ -84,6 +88,10 @@ export default function App() {
             </PrivateRoute>
           }
         />
+        <Route path="/subscriptions" element={<SubscriptionsListPage />} />
+        <Route path="/subscriptions/:id/billing" element={<BillingDetailPage />} />
+        <Route path="/invoices" element={<InvoicesListPage />} />
+        <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
         <Route
           path="/admin/products"
           element={

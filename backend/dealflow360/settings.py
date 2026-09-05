@@ -43,6 +43,9 @@ INSTALLED_APPS = [
     "quotations",
     "approvals",
     "warehouses_fulfillment",
+    "subscriptions_billing",
+    "invoicing_payments",
+    "portal",
     "audit_log",
 ]
 
@@ -145,3 +148,15 @@ if DEBUG:
     ]
 
 CORS_ALLOW_HEADERS = (*cors_default_headers, "x-company-id")
+
+# --- Customer portal (spec §5.9, §14) -------------------------------------------------
+# Portal tokens are short-lived and single-quotation-scoped by design: they are a way to
+# show one customer one deal, never a workspace credential, so the lifetime is measured in
+# days rather than the months a login session would get.
+PORTAL_TOKEN_TTL_HOURS = int(env("PORTAL_TOKEN_TTL_HOURS", "72"))
+
+# Where the generated magic link points. Left blank on purpose: the link is then built
+# from the requesting workspace's own Origin, so a rep on http://192.168.x.y:5173 sends a
+# link that works on the LAN instead of one that only opens on the server's localhost.
+# Set it explicitly for a deployment with a fixed customer-facing hostname.
+PORTAL_BASE_URL = env("PORTAL_BASE_URL", "")

@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -121,6 +122,80 @@ class QuotationViewSet(QuotationScopedMixin, viewsets.ModelViewSet):
                     ApprovalRequestSerializer(approval_request).data if approval_request else None
                 ),
             }
+        )
+
+    def assert_owned_or_privileged(self, quotation, verb):
+        """A rep may only reach into their own deals; every other role sees the company."""
+        if (
+            self.membership.role.code == Role.SALES_REP
+            and quotation.owner_id != self.request.user.id
+        ):
+            raise PermissionDenied(f"You can only {verb} your own quotations.")
+
+    @action(detail=True, methods=["post"], url_path="generate-portal-link")
+    def generate_portal_link(self, request, pk=None):
+        """Mint the customer's magic link (§5.9).
+
+        This is the one place the two auth worlds touch, and they touch in exactly one
+        direction: an authenticated internal user asks for a token, and gets back a string
+        that is useless anywhere except `/api/portal/`. The raw token is returned once and
+        never stored, so re-sending a link always means issuing a fresh one.
+        """
+        from portal.serializers import PortalSessionSerializer
+        from portal.services import issue_session, portal_url
+
+        quotation = self.get_object()
+        self.assert_owned_or_privileged(quotation, "send")
+
+        try:
+            session, raw_token = issue_session(quotation, request.user)
+        except ValueError as exc:
+            raise ValidationError({"detail": str(exc)})
+
+        # An explicit setting wins; otherwise the link is built from the origin the rep is
+        # actually using, so a LAN address produces a LAN-reachable link.
+        base_url = settings.PORTAL_BASE_URL or request.headers.get("Origin") or ""
+        return Response(
+            {
+                "token": raw_token,
+                "portal_url": portal_url(raw_token, base_url),
+                "session": PortalSessionSerializer(session).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["get", "post"], url_path="negotiation")
+    def negotiation(self, request, pk=None):
+        """The negotiation thread, seen and answered from the internal workspace.
+
+        Same rows the portal reads — one thread, two auth boundaries (§5.9). Without this
+        the rep would be negotiating blind, answering in email while the customer types
+        into a portal nobody internal can see.
+        """
+        from portal.serializers import NegotiationMessageSerializer
+        from portal.services import post_internal_reply
+
+        quotation = self.get_object()
+        messages = quotation.negotiation_messages.select_related(
+            "author_user", "author_customer", "quotation_line__product"
+        )
+
+        if request.method == "GET":
+            return Response(NegotiationMessageSerializer(messages, many=True).data)
+
+        self.assert_owned_or_privileged(quotation, "reply on")
+        body = (request.data.get("body") or "").strip()
+        if not body:
+            raise ValidationError({"body": "A message cannot be empty."})
+
+        line = None
+        line_id = request.data.get("quotation_line")
+        if line_id:
+            line = get_object_or_404(QuotationLine, pk=line_id, quotation=quotation)
+
+        message = post_internal_reply(quotation, request.user, body, line=line)
+        return Response(
+            NegotiationMessageSerializer(message).data, status=status.HTTP_201_CREATED
         )
 
 

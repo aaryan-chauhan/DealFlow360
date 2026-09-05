@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { parseApiError } from '../../shared/api/errors'
 import { formatCurrency, formatPct } from '../../shared/format'
 import StatusPill from '../../shared/ui/StatusPill'
+import NegotiationPanel from './NegotiationPanel'
 import { useDeleteLineMutation, useUpdateLineMutation } from './quotationsApi'
 
 function formatDate(value) {
@@ -126,6 +127,38 @@ function GovernanceBanner({ quotation }) {
         {decision.reason && <p className="mt-1 text-sm text-orange-800">“{decision.reason}”</p>}
         <p className="mt-2 text-sm text-orange-800">
           Adjust the lines below and submit again — that opens a fresh approval cycle.
+        </p>
+      </div>
+    )
+  }
+
+  if (quotation.status === 'negotiation') {
+    const counter = [...(quotation.negotiation ?? [])]
+      .reverse()
+      .find((message) => message.message_type === 'counter_offer')
+    return (
+      <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+        <h2 className="text-sm font-semibold text-violet-900">Live with the customer</h2>
+        <p className="mt-1 text-sm text-violet-800">
+          {counter
+            ? `${quotation.customer_name} counter-offered ${parseFloat(
+                counter.counter_discount_pct,
+              )}%${counter.line_label ? ` on ${counter.line_label}` : ' on the whole quote'}, and it cleared policy — the lines below already reflect it.`
+            : `${quotation.customer_name} has the portal link open.`}{' '}
+          A counter-offer that breaches a ceiling re-opens approval on its own; nobody has to
+          resubmit it.
+        </p>
+      </div>
+    )
+  }
+
+  if (quotation.status === 'confirmed') {
+    return (
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <h2 className="text-sm font-semibold text-blue-900">Confirmed by the customer</h2>
+        <p className="mt-1 text-sm text-blue-800">
+          Accepted from the customer portal. Fulfillment and billing have been raised
+          automatically.
         </p>
       </div>
     )
@@ -273,6 +306,8 @@ export default function ReviewStep({ quotation, editable, onBack, onSubmit, isSu
               </tfoot>
             </table>
           </section>
+
+          <NegotiationPanel quotation={quotation} />
         </div>
 
         <aside className="space-y-5">

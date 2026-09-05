@@ -129,6 +129,8 @@ class QuotationDetailSerializer(QuotationListSerializer):
     can_edit = serializers.SerializerMethodField()
     active_approval = serializers.SerializerMethodField()
     last_decision = serializers.SerializerMethodField()
+    negotiation = serializers.SerializerMethodField()
+    portal_link = serializers.SerializerMethodField()
 
     class Meta(QuotationListSerializer.Meta):
         fields = QuotationListSerializer.Meta.fields + [
@@ -139,6 +141,8 @@ class QuotationDetailSerializer(QuotationListSerializer):
             "can_edit",
             "active_approval",
             "last_decision",
+            "negotiation",
+            "portal_link",
         ]
 
     def get_can_edit(self, quotation):
@@ -159,6 +163,36 @@ class QuotationDetailSerializer(QuotationListSerializer):
             "risk_score_snapshot": str(request.risk_score_snapshot),
             "current_stage": step.stage if step else None,
             "current_stage_label": step.get_stage_display() if step else None,
+        }
+
+    def get_negotiation(self, quotation):
+        """The customer thread, inlined on the internal quote page (§5.9). Same rows the
+        portal reads — one conversation, reached through two different auth boundaries."""
+        from portal.serializers import NegotiationMessageSerializer
+
+        return NegotiationMessageSerializer(
+            quotation.negotiation_messages.select_related(
+                "author_user", "author_customer", "quotation_line__product"
+            ),
+            many=True,
+        ).data
+
+    def get_portal_link(self, quotation):
+        """Whether a live customer link exists, and when it lapses — never the token
+        itself, which is stored only as a hash and cannot be re-read."""
+        from portal.models import PortalSession
+
+        session = (
+            PortalSession.objects.filter(quotation=quotation, revoked_at__isnull=True)
+            .order_by("-created_at")
+            .first()
+        )
+        if session is None or not session.is_active:
+            return None
+        return {
+            "expires_at": session.expires_at,
+            "last_used_at": session.last_used_at,
+            "issued_at": session.created_at,
         }
 
     def get_last_decision(self, quotation):

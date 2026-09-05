@@ -45,8 +45,8 @@ const NAV = [
     roles: ['admin', 'sales_manager'],
   },
   { label: 'Orders', icon: 'orders' },
-  { label: 'Invoices', icon: 'invoices' },
-  { label: 'Subscriptions', icon: 'subscriptions' },
+  { label: 'Invoices', to: '/invoices', icon: 'invoices' },
+  { label: 'Subscriptions', to: '/subscriptions', icon: 'subscriptions' },
   { label: 'Reports', icon: 'reports' },
   { label: 'Settings', icon: 'settings' },
 ]

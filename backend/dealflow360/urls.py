@@ -10,4 +10,9 @@ urlpatterns = [
     path("api/", include("quotations.urls")),
     path("api/", include("approvals.urls")),
     path("api/", include("warehouses_fulfillment.urls")),
+    path("api/", include("subscriptions_billing.urls")),
+    path("api/", include("invoicing_payments.urls")),
+    # Its own namespace, not folded into the "api/" includes above: everything under
+    # /api/portal/ is gated by a portal token and nothing else (§8).
+    path("api/portal/", include("portal.urls")),
 ]

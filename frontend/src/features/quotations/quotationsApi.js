@@ -49,6 +49,26 @@ export const quotationsApi = apiSlice.injectEndpoints({
       query: (id) => ({ url: `/quotations/${id}/submit-for-approval`, method: 'POST', body: {} }),
       invalidatesTags: (r, e, id) => [{ type: 'Quotation', id }, 'Quotation', 'Approval'],
     }),
+    // Mints the customer's magic link. The raw token comes back exactly once — the API
+    // stores only a hash — so the response is the only chance to show or copy it.
+    generatePortalLink: builder.mutation({
+      query: (id) => ({
+        url: `/quotations/${id}/generate-portal-link`,
+        method: 'POST',
+        body: {},
+      }),
+      invalidatesTags: (r, e, id) => [{ type: 'Quotation', id }],
+    }),
+    // The rep's side of the customer thread. Same rows the portal reads (§5.9), reached
+    // through the internal JWT rather than a portal token.
+    replyToNegotiation: builder.mutation({
+      query: ({ quotationId, ...body }) => ({
+        url: `/quotations/${quotationId}/negotiation`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (r, e, { quotationId }) => [{ type: 'Quotation', id: quotationId }],
+    }),
     getCustomers: builder.query({
       query: (search) => ({ url: '/customers', params: search ? { search } : undefined }),
       providesTags: ['Customer'],
@@ -68,6 +88,8 @@ export const {
   useUpdateLineMutation,
   useDeleteLineMutation,
   useSubmitForApprovalMutation,
+  useGeneratePortalLinkMutation,
+  useReplyToNegotiationMutation,
   useGetCustomersQuery,
   useCreateCustomerMutation,
 } = quotationsApi
