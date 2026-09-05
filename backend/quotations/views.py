@@ -1,0 +1,176 @@
+from django.shortcuts import get_object_or_404
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.generics import CreateAPIView, RetrieveUpdateDestroyAPIView
+from rest_framework.response import Response
+
+from accounts.models import Role
+from accounts.permissions import IsCompanyMember
+from accounts.scoping import get_membership
+from approvals.serializers import ApprovalRequestSerializer
+from approvals.services import reassess_after_line_change, route_quotation
+
+from .models import Quotation, QuotationLine
+from .serializers import (
+    QuotationDetailSerializer,
+    QuotationLineSerializer,
+    QuotationListSerializer,
+)
+
+
+def assessment_payload(assessment):
+    return {
+        "blended_score": str(assessment.blended_score),
+        "max_single_overage": str(assessment.max_single_overage),
+        "routing_score": str(assessment.routing_score),
+        "required_level": assessment.required_level,
+        "needs_approval": assessment.needs_approval,
+        "total_value": str(assessment.total_value),
+        "lines": [
+            {
+                "line_id": line.line_id,
+                "category": line.category,
+                "discount_pct": str(line.discount_pct),
+                "ceiling_pct": str(line.ceiling_pct),
+                "overage_pct": str(line.overage_pct),
+                "line_value": str(line.line_value),
+            }
+            for line in assessment.lines
+        ],
+    }
+
+
+class QuotationScopedMixin:
+    permission_classes = [IsCompanyMember]
+
+    @property
+    def membership(self):
+        membership = get_membership(self.request)
+        if membership is None:
+            raise PermissionDenied("No company membership for this user.")
+        return membership
+
+    def scoped_quotations(self):
+        """Reps only ever see their own pipeline — enforced in the queryset, never in
+        the UI (§12)."""
+        qs = Quotation.objects.filter(company=self.membership.company).select_related(
+            "customer", "owner"
+        )
+        if self.membership.role.code == Role.SALES_REP:
+            qs = qs.filter(owner=self.request.user)
+        return qs
+
+    def get_serializer_context(self):
+        return {**super().get_serializer_context(), "membership": self.membership}
+
+    def assert_editable(self, quotation):
+        if quotation.status not in Quotation.EDITABLE_STATUSES:
+            raise ValidationError(
+                {"detail": f"A quotation in '{quotation.get_status_display()}' cannot be edited."}
+            )
+        if (
+            self.membership.role.code == Role.SALES_REP
+            and quotation.owner_id != self.request.user.id
+        ):
+            raise PermissionDenied("You can only edit your own quotations.")
+
+
+class QuotationViewSet(QuotationScopedMixin, viewsets.ModelViewSet):
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def get_queryset(self):
+        qs = self.scoped_quotations().prefetch_related("lines__product", "status_history")
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status__in=status_filter.split(","))
+        owner = self.request.query_params.get("owner")
+        if owner:
+            qs = qs.filter(owner_id=owner)
+        return qs
+
+    def get_serializer_class(self):
+        return QuotationListSerializer if self.action == "list" else QuotationDetailSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(company=self.membership.company, owner=self.request.user)
+
+    def perform_update(self, serializer):
+        self.assert_editable(serializer.instance)
+        serializer.save()
+
+    @action(detail=True, methods=["post"], url_path="submit-for-approval")
+    def submit_for_approval(self, request, pk=None):
+        quotation = self.get_object()
+        if quotation.status not in {Quotation.DRAFT, Quotation.NEGOTIATION}:
+            raise ValidationError(
+                {"detail": f"Only a draft can be submitted (this one is {quotation.status})."}
+            )
+        if self.membership.role.code == Role.SALES_REP and quotation.owner_id != request.user.id:
+            raise PermissionDenied("You can only submit your own quotations.")
+        if not quotation.lines.exists():
+            raise ValidationError({"detail": "Add at least one line before submitting."})
+
+        assessment, approval_request = route_quotation(quotation, request.user)
+        quotation.refresh_from_db()
+        return Response(
+            {
+                "quotation": QuotationDetailSerializer(
+                    quotation, context=self.get_serializer_context()
+                ).data,
+                "assessment": assessment_payload(assessment),
+                "approval_request": (
+                    ApprovalRequestSerializer(approval_request).data if approval_request else None
+                ),
+            }
+        )
+
+
+class QuotationLineCreateView(QuotationScopedMixin, CreateAPIView):
+    serializer_class = QuotationLineSerializer
+
+    def get_quotation(self):
+        return get_object_or_404(self.scoped_quotations(), pk=self.kwargs["quotation_id"])
+
+    def create(self, request, *args, **kwargs):
+        quotation = self.get_quotation()
+        self.assert_editable(quotation)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(quotation=quotation)
+        # An edit after submission re-runs the risk engine automatically (§7.1).
+        assessment, _ = reassess_after_line_change(quotation, request.user)
+        return Response(
+            {"line": serializer.data, "assessment": assessment_payload(assessment)},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class QuotationLineDetailView(QuotationScopedMixin, RetrieveUpdateDestroyAPIView):
+    serializer_class = QuotationLineSerializer
+    http_method_names = ["get", "patch", "delete", "head", "options"]
+
+    def get_quotation(self):
+        return get_object_or_404(self.scoped_quotations(), pk=self.kwargs["quotation_id"])
+
+    def get_object(self):
+        return get_object_or_404(
+            QuotationLine, pk=self.kwargs["line_id"], quotation=self.get_quotation()
+        )
+
+    def update(self, request, *args, **kwargs):
+        quotation = self.get_quotation()
+        self.assert_editable(quotation)
+        line = self.get_object()
+        serializer = self.get_serializer(line, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        assessment, _ = reassess_after_line_change(quotation, request.user)
+        return Response({"line": serializer.data, "assessment": assessment_payload(assessment)})
+
+    def destroy(self, request, *args, **kwargs):
+        quotation = self.get_quotation()
+        self.assert_editable(quotation)
+        self.get_object().delete()
+        reassess_after_line_change(quotation, request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)

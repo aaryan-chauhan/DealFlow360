@@ -1,0 +1,7 @@
+# Normalise line endings so Windows checkouts don't show whole-file diffs to
+# collaborators on macOS/Linux.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.pdf binary

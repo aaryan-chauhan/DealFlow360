@@ -1,0 +1,38 @@
+# --- Python / Django ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+*.sqlite3
+staticfiles/
+media/
+
+# --- Secrets ---
+# Real credentials never get committed; the .example files document what to set.
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# --- Node / Vite ---
+node_modules/
+dist/
+.vite/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Claude Code local state ---
+.claude/settings.local.json
