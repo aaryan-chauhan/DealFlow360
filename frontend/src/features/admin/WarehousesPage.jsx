@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { useSelector } from 'react-redux'
+
+import { selectActiveRole } from '../../auth/authSlice'
 import {
   useCreateWarehouseMutation,
   useGetStockLevelsQuery,
@@ -6,7 +9,15 @@ import {
   useUpdateStockLevelMutation,
 } from './adminApi'
 
+// Mirrors backend/warehouses_fulfillment/views.py's MANAGE_ROLES — Finance & Admin
+// manage warehouses/stock per spec §3; Sales Manager may view this screen but any
+// write here would 403, so the controls stay hidden rather than offering an action
+// that fails.
+const MANAGE_ROLES = ['admin', 'finance_ops']
+
 export default function WarehousesPage() {
+  const role = useSelector(selectActiveRole)
+  const canManage = MANAGE_ROLES.includes(role)
   const { data: warehouses = [], isLoading: loadingWarehouses } = useGetWarehousesQuery()
   const { data: stockLevels = [], isLoading: loadingStock } = useGetStockLevelsQuery()
   const [createWarehouse, { isLoading: isCreating }] = useCreateWarehouseMutation()
@@ -52,12 +63,14 @@ export default function WarehousesPage() {
           <h1 className="text-xl font-bold text-slate-900">Warehouses & Stock Inventory</h1>
           <p className="text-xs text-slate-500">Configure shipping locations and manage stock levels per SKU</p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 shadow transition"
-        >
-          + Add Warehouse
-        </button>
+        {canManage && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 shadow transition"
+          >
+            + Add Warehouse
+          </button>
+        )}
       </div>
 
       {/* Warehouse Locations Cards */}
@@ -130,7 +143,9 @@ export default function WarehousesPage() {
                     <td className="px-4 py-3 text-amber-600 font-medium">{st.qty_reserved}</td>
                     <td className="px-4 py-3 text-emerald-600 font-bold">{st.qty_available}</td>
                     <td className="px-4 py-3 text-right">
-                      {editingStockId === st.id ? (
+                      {!canManage ? (
+                        <span className="text-xs text-slate-400">View only</span>
+                      ) : editingStockId === st.id ? (
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleSaveStock(st.id)}

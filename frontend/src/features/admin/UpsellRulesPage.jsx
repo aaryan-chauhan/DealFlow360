@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { useSelector } from 'react-redux'
+
+import { selectActiveRole } from '../../auth/authSlice'
 import { useGetProductsQuery } from './catalogApi'
 import {
   useCreateUpsellRuleMutation,
@@ -7,6 +10,10 @@ import {
 } from './adminApi'
 
 export default function UpsellRulesPage() {
+  // Mirrors backend's IsAdminOrReadOnly on UpsellRuleViewSet — Admin-configured
+  // pairing logic per spec §5.6; Sales Manager may view this screen but any write
+  // here would 403, so the controls stay hidden for that role.
+  const canManage = useSelector(selectActiveRole) === 'admin'
   const { data: rules = [], isLoading: loadingRules } = useGetUpsellRulesQuery()
   const { data: products = [], isLoading: loadingProducts } = useGetProductsQuery()
   const [createRule, { isLoading: isCreating }] = useCreateUpsellRuleMutation()
@@ -48,12 +55,14 @@ export default function UpsellRulesPage() {
           <h1 className="text-xl font-bold text-slate-900">Upsell & Cross-Sell Rules</h1>
           <p className="text-xs text-slate-500">Configure pairing recommendations, co-purchase scores, and minimum margin caps (spec §7.4)</p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 shadow transition"
-        >
-          + Add Pairing Rule
-        </button>
+        {canManage && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 shadow transition"
+          >
+            + Add Pairing Rule
+          </button>
+        )}
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -96,12 +105,14 @@ export default function UpsellRulesPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => deleteRule(rule.id)}
-                        className="text-xs font-semibold text-slate-400 hover:text-rose-600"
-                      >
-                        Delete
-                      </button>
+                      {canManage && (
+                        <button
+                          onClick={() => deleteRule(rule.id)}
+                          className="text-xs font-semibold text-slate-400 hover:text-rose-600"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

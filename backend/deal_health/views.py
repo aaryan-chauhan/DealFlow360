@@ -1,8 +1,9 @@
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from accounts.permissions import IsCompanyMember
+from accounts.scoping import get_membership, scope_to_owner
 from deal_health.models import AnomalyAlert
 from deal_health.serializers import AnomalyAlertSerializer, EscalateAlertRequestSerializer
 from deal_health.services import escalate_alert, nudge_rep, run_deal_health_scan
@@ -10,14 +11,15 @@ from deal_health.services import escalate_alert, nudge_rep, run_deal_health_scan
 
 class AnomalyAlertViewSet(viewsets.ModelViewSet):
     serializer_class = AnomalyAlertSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsCompanyMember]
     http_method_names = ["get", "post", "patch"]
 
     def get_queryset(self):
-        membership = getattr(self.request, "membership", None)
+        membership = get_membership(self.request)
         if not membership:
             return AnomalyAlert.objects.none()
         qs = AnomalyAlert.objects.filter(company=membership.company)
+        qs = scope_to_owner(qs, membership, self.request.user, owner_field="quotation__owner")
 
         status_param = self.request.query_params.get("status")
         if status_param:
@@ -35,7 +37,7 @@ class AnomalyAlertViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="scan")
     def trigger_scan(self, request):
-        membership = getattr(request, "membership", None)
+        membership = get_membership(request)
         if not membership:
             return Response({"detail": "Active membership required"}, status=status.HTTP_403_FORBIDDEN)
         res = run_deal_health_scan(membership.company)

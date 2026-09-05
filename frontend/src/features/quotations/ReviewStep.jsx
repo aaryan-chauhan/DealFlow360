@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { parseApiError } from '../../shared/api/errors'
 import { formatCurrency, formatPct } from '../../shared/format'
 import StatusPill from '../../shared/ui/StatusPill'
+import NegotiationPanel from './NegotiationPanel'
 import {
   useAddSuggestionMutation,
   useDeleteLineMutation,

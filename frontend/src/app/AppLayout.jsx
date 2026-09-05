@@ -24,7 +24,7 @@ const icons = {
 const NAV = [
   { label: 'Dashboard', to: '/dashboard', icon: 'dashboard' },
   { label: 'Deal Health', to: '/deal-health', icon: 'reports' },
-  { label: 'Reports', to: '/reports', icon: 'reports' },
+  { label: 'Reports', to: '/reports', icon: 'reports', roles: ['sales_manager', 'admin'] },
   { label: 'Quotations', to: '/quotations', icon: 'quotations' },
   {
     label: 'Approvals',

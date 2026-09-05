@@ -30,9 +30,9 @@ def run_deal_health_scan(company):
             alert_type=AnomalyAlert.STALLED_DEAL,
             status__in=[AnomalyAlert.OPEN, AnomalyAlert.NUDGED, AnomalyAlert.ESCALATED],
             defaults={
-                "severity": AnomalyAlert.HIGH if q.total_amount > Decimal("500000.00") else AnomalyAlert.MEDIUM,
+                "severity": AnomalyAlert.HIGH if q.total_value > Decimal("500000.00") else AnomalyAlert.MEDIUM,
                 "title": f"Stalled Quotation {q.number} ({q.customer.name})",
-                "description": f"Quotation in status '{q.status}' has had no activity since {q.updated_at.strftime('%Y-%m-%d')}. Value: ₹{q.total_amount:,.2f}.",
+                "description": f"Quotation in status '{q.status}' has had no activity since {q.updated_at.strftime('%Y-%m-%d')}. Value: ₹{q.total_value:,.2f}.",
                 "recommended_action": "Follow up with customer or nudge quote owner.",
             },
         )
@@ -57,7 +57,7 @@ def run_deal_health_scan(company):
             defaults={
                 "severity": AnomalyAlert.CRITICAL if max_discount > Decimal("20.00") else AnomalyAlert.HIGH,
                 "title": f"High Discount Anomaly on {q.number}",
-                "description": f"Line item discount of {max_discount}% exceeds standard sales baseline (15.00%). Total quote value: ₹{q.total_amount:,.2f}.",
+                "description": f"Line item discount of {max_discount}% exceeds standard sales baseline (15.00%). Total quote value: ₹{q.total_value:,.2f}.",
                 "recommended_action": "Requires Sales Manager approval or discount reduction.",
             },
         )
@@ -81,7 +81,7 @@ def run_deal_health_scan(company):
             defaults={
                 "severity": AnomalyAlert.CRITICAL,
                 "title": f"Stock Backorder Slippage on {q.number}",
-                "description": f"Fulfillment order {fo.order_number} is backordered due to inventory shortage. Promised delivery: {fo.promised_date or 'TBD'}.",
+                "description": f"Fulfillment order for {q.number} is backordered due to inventory shortage. Promised delivery: {fo.promised_date or 'TBD'}.",
                 "recommended_action": "Escalate to Ops / Warehouse lead for stock replenishment.",
             },
         )
@@ -104,7 +104,7 @@ def escalate_alert(alert, user, note=""):
     alert.save()
 
     log_event(
-        user.company,
+        alert.company,
         user,
         alert,
         "ESCALATE_ALERT",
@@ -121,7 +121,7 @@ def nudge_rep(alert, user):
     alert.save()
 
     log_event(
-        user.company,
+        alert.company,
         user,
         alert,
         "NUDGE_REP",

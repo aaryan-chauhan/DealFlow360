@@ -60,7 +60,14 @@ export default function App() {
       >
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/deal-health" element={<DealHealthPage />} />
-        <Route path="/reports" element={<ReportingPage />} />
+        <Route
+          path="/reports"
+          element={
+            <PrivateRoute roles={['sales_manager', 'admin']}>
+              <ReportingPage />
+            </PrivateRoute>
+          }
+        />
         <Route path="/quotations" element={<QuotationsListPage />} />
         <Route path="/quotations/new" element={<QuotationBuilderPage />} />
         <Route path="/quotations/:id" element={<QuotationBuilderPage />} />

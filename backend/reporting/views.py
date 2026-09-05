@@ -1,17 +1,18 @@
 from django.http import HttpResponse
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.permissions import IsSalesManager
+from accounts.scoping import get_membership
 from reporting.services import generate_reporting_csv, get_reporting_summary
 
 
 class ReportingSummaryView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsSalesManager]
 
     def get(self, request):
-        membership = getattr(request, "membership", None)
+        membership = get_membership(request)
         if not membership:
             return Response({"detail": "Active membership required"}, status=status.HTTP_403_FORBIDDEN)
 
@@ -23,10 +24,10 @@ class ReportingSummaryView(APIView):
 
 
 class ReportingExportView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsSalesManager]
 
     def get(self, request):
-        membership = getattr(request, "membership", None)
+        membership = get_membership(request)
         if not membership:
             return Response({"detail": "Active membership required"}, status=status.HTTP_403_FORBIDDEN)
 

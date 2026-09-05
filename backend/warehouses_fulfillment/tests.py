@@ -363,3 +363,65 @@ class LineMergeTests(FulfillmentTestBase):
         # The negotiated discount survives the top-up; the picker's default 0 must not
         # silently wipe it.
         self.assertEqual(lines[0].discount_pct, D("12.00"))
+
+
+class WarehouseAdminEndpointTests(FulfillmentTestBase):
+    """`/api/warehouses` and `/api/stock-levels` (Screen 18-adjacent admin config, §8).
+
+    `WarehouseAdminViewSet`/`StockLevelAdminViewSet` reference `Warehouse`/`StockLevel`
+    directly in `get_queryset` — pinned here because those names were once missing from
+    this module's imports, which only surfaces as a 500 the moment the endpoint is hit
+    (`manage.py check` cannot catch a NameError inside a method body).
+    """
+
+    def setUp(self):
+        self.stock(self.mumbai, 40)
+
+    def test_list_warehouses_does_not_crash(self):
+        response = self.client_for(self.admin).get("/api/warehouses")
+        self.assertEqual(response.status_code, 200)
+        names = {w["name"] for w in response.json()}
+        self.assertEqual(names, {"Mumbai WH", "Bangalore WH"})
+
+    def test_list_stock_levels_does_not_crash(self):
+        response = self.client_for(self.finance).get("/api/stock-levels")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 1)
+        self.assertEqual(response.json()[0]["warehouse_name"], "Mumbai WH")
+
+    def test_finance_can_create_warehouse(self):
+        response = self.client_for(self.finance).post(
+            "/api/warehouses",
+            {"name": "Pune WH", "shipping_cost_weight": "1.50"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+
+    def test_rep_cannot_create_warehouse(self):
+        response = self.client_for(self.rep).post(
+            "/api/warehouses",
+            {"name": "Rep's WH", "shipping_cost_weight": "1.00"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_rep_cannot_delete_warehouse(self):
+        response = self.client_for(self.rep).delete(f"/api/warehouses/{self.mumbai.id}")
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(Warehouse.objects.filter(pk=self.mumbai.id).exists())
+
+    def test_finance_can_update_stock_level(self):
+        level = StockLevel.objects.get(warehouse=self.mumbai, product=self.widget)
+        response = self.client_for(self.finance).patch(
+            f"/api/stock-levels/{level.id}", {"qty_on_hand": "55"}, format="json"
+        )
+        self.assertEqual(response.status_code, 200)
+        level.refresh_from_db()
+        self.assertEqual(level.qty_on_hand, D("55"))
+
+    def test_rep_cannot_update_stock_level(self):
+        level = StockLevel.objects.get(warehouse=self.mumbai, product=self.widget)
+        response = self.client_for(self.rep).patch(
+            f"/api/stock-levels/{level.id}", {"qty_on_hand": "999"}, format="json"
+        )
+        self.assertEqual(response.status_code, 403)

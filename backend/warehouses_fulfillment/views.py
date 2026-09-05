@@ -8,7 +8,7 @@ from accounts.models import Role
 from accounts.permissions import IsCompanyMember
 from accounts.scoping import get_membership, scope_to_owner
 
-from .models import FulfillmentOrder
+from .models import FulfillmentOrder, StockLevel, Warehouse
 from .serializers import (
     ConsolidateSerializer,
     FulfillmentOrderDetailSerializer,
@@ -201,6 +201,11 @@ class WarehouseAdminViewSet(viewsets.ModelViewSet):
         if self.membership.role.code not in MANAGE_ROLES:
             raise PermissionDenied("Only Admin or Finance can update warehouses.")
         serializer.save()
+
+    def perform_destroy(self, instance):
+        if self.membership.role.code not in MANAGE_ROLES:
+            raise PermissionDenied("Only Admin or Finance can delete warehouses.")
+        instance.delete()
 
 
 class StockLevelAdminViewSet(viewsets.ModelViewSet):

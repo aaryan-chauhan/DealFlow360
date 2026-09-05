@@ -1,7 +1,14 @@
 import { useState } from 'react'
+import { useSelector } from 'react-redux'
+
+import { selectActiveRole } from '../../auth/authSlice'
 import { useCreateSubscriptionPlanMutation, useGetSubscriptionPlansQuery } from './adminApi'
 
 export default function SubscriptionPlansPage() {
+  // Mirrors backend's IsAdminOrReadOnly on SubscriptionPlanViewSet — Admin-only
+  // config per spec §5.8; Finance may view this screen for billing context but
+  // any write here would 403, so the control stays hidden for that role.
+  const canManage = useSelector(selectActiveRole) === 'admin'
   const { data: plans = [], isLoading } = useGetSubscriptionPlansQuery()
   const [createPlan, { isLoading: isCreating }] = useCreateSubscriptionPlanMutation()
 
@@ -37,12 +44,14 @@ export default function SubscriptionPlansPage() {
           <h1 className="text-xl font-bold text-slate-900">Subscription Plans</h1>
           <p className="text-xs text-slate-500">Configure recurring billing cycles, proration rules, and cancellation refund policies</p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 shadow transition"
-        >
-          + Add Subscription Plan
-        </button>
+        {canManage && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 shadow transition"
+          >
+            + Add Subscription Plan
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
