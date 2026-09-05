@@ -39,6 +39,12 @@ class Quotation(UUIDModel, TimeStampedModel):
     blended_risk_score = models.DecimalField(
         max_digits=6, decimal_places=2, default=Decimal("0.00")
     )
+    # Cached beside the blended score for the same reason (§5.4). Routing uses the
+    # *greater* of the two (§7.1), so without this every screen that wants to show the
+    # number that actually decided approval would have to re-run the engine on read.
+    max_single_overage = models.DecimalField(
+        max_digits=6, decimal_places=2, default=Decimal("0.00")
+    )
     valid_till = models.DateField(null=True, blank=True)
 
     class Meta:
@@ -50,6 +56,13 @@ class Quotation(UUIDModel, TimeStampedModel):
 
     def __str__(self):
         return self.number
+
+    @property
+    def routing_score(self):
+        """The number the approval chain is matched against (§7.1) — the greater of the
+        blended average and the worst single line, so one badly-over line can never hide
+        inside an otherwise-low average. This is the score every screen should headline."""
+        return max(self.blended_risk_score, self.max_single_overage)
 
     @property
     def total_value(self):
@@ -124,6 +137,22 @@ class QuotationLine(UUIDModel, TimeStampedModel):
     class Meta:
         db_table = "quotation_line"
         ordering = ["created_at"]
+        # One row per (product, variant) per quote. Two constraints rather than one
+        # because Postgres treats NULLs as distinct in a unique index, so a plain
+        # three-column constraint would happily allow the same product twice whenever
+        # `variant` is null — which is the common case.
+        constraints = [
+            models.UniqueConstraint(
+                fields=["quotation", "product", "variant"],
+                condition=models.Q(variant__isnull=False),
+                name="uniq_line_quotation_product_variant",
+            ),
+            models.UniqueConstraint(
+                fields=["quotation", "product"],
+                condition=models.Q(variant__isnull=True),
+                name="uniq_line_quotation_product_no_variant",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.product.name} x{self.qty}"

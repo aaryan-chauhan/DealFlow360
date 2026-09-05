@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "pricing_discounts",
     "quotations",
     "approvals",
+    "warehouses_fulfillment",
     "audit_log",
 ]
 
@@ -131,4 +132,16 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = env_list(
     "CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
 )
+
+if DEBUG:
+    # Testing on a phone or a second laptop means the browser's Origin is this machine's
+    # LAN IP, which DHCP can change without warning. Rather than re-editing .env every
+    # time, accept any private-range origin — but only with DEBUG on, so a production
+    # deployment still has to name its origins explicitly above.
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r"^http://192\.168\.\d{1,3}\.\d{1,3}:\d+$",
+        r"^http://10\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$",
+        r"^http://172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}:\d+$",
+    ]
+
 CORS_ALLOW_HEADERS = (*cors_default_headers, "x-company-id")

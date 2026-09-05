@@ -33,6 +33,7 @@ class ApprovalRequestSerializer(serializers.ModelSerializer):
     current_stage = serializers.SerializerMethodField()
     total_value = serializers.SerializerMethodField()
     can_act = serializers.SerializerMethodField()
+    quotation_status = serializers.CharField(source="quotation.status", read_only=True)
 
     class Meta:
         model = ApprovalRequest
@@ -48,6 +49,8 @@ class ApprovalRequestSerializer(serializers.ModelSerializer):
             "current_stage",
             "total_value",
             "can_act",
+            "quotation_status",
+            "superseded_by",
             "steps",
             "created_at",
         ]

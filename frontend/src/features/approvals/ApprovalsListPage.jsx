@@ -6,6 +6,7 @@ import StatusPill from '../../shared/ui/StatusPill'
 import { useGetApprovalsQuery } from './approvalsApi'
 
 const TABS = [
+  { label: 'Waiting on me', value: 'mine' },
   { label: 'Pending', value: 'pending' },
   { label: 'Approved', value: 'approved' },
   { label: 'Rejected', value: 'rejected' },
@@ -16,9 +17,12 @@ const STAGE_LABEL = { manager: 'Sales Manager', finance: 'Finance / Ops' }
 
 export default function ApprovalsListPage() {
   const [tab, setTab] = useState('pending')
-  const { data: approvals = [], isLoading } = useGetApprovalsQuery(
-    tab ? { status: tab } : undefined,
+  // "Waiting on me" is the pending list narrowed to the steps this viewer's role can
+  // actually action — the server already decides that per row via can_act.
+  const { data: rows = [], isLoading } = useGetApprovalsQuery(
+    tab && tab !== 'mine' ? { status: tab } : tab === 'mine' ? { status: 'pending' } : undefined,
   )
+  const approvals = tab === 'mine' ? rows.filter((request) => request.can_act) : rows
 
   return (
     <div className="space-y-5">
@@ -70,7 +74,9 @@ export default function ApprovalsListPage() {
             {!isLoading && approvals.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-5 py-10 text-center text-sm text-slate-500">
-                  Nothing waiting here.
+                  {tab === 'mine'
+                    ? 'Nothing is waiting on you right now. A request appears here once the chain reaches your stage.'
+                    : 'Nothing waiting here.'}
                 </td>
               </tr>
             )}

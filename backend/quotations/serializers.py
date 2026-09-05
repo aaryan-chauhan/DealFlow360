@@ -80,6 +80,7 @@ class QuotationListSerializer(serializers.ModelSerializer):
     owner_name = serializers.SerializerMethodField()
     total_value = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     line_count = serializers.IntegerField(source="lines.count", read_only=True)
+    routing_score = serializers.DecimalField(max_digits=6, decimal_places=2, read_only=True)
 
     class Meta:
         model = Quotation
@@ -93,13 +94,21 @@ class QuotationListSerializer(serializers.ModelSerializer):
             "owner",
             "owner_name",
             "blended_risk_score",
+            "max_single_overage",
+            "routing_score",
             "total_value",
             "line_count",
             "valid_till",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["number", "status", "owner", "blended_risk_score"]
+        read_only_fields = [
+            "number",
+            "status",
+            "owner",
+            "blended_risk_score",
+            "max_single_overage",
+        ]
 
     def get_owner_name(self, quotation):
         return quotation.owner.full_name or quotation.owner.email
@@ -118,6 +127,8 @@ class QuotationDetailSerializer(QuotationListSerializer):
         max_digits=6, decimal_places=2, read_only=True
     )
     can_edit = serializers.SerializerMethodField()
+    active_approval = serializers.SerializerMethodField()
+    last_decision = serializers.SerializerMethodField()
 
     class Meta(QuotationListSerializer.Meta):
         fields = QuotationListSerializer.Meta.fields + [
@@ -126,7 +137,50 @@ class QuotationDetailSerializer(QuotationListSerializer):
             "status_history",
             "average_discount_pct",
             "can_edit",
+            "active_approval",
+            "last_decision",
         ]
 
     def get_can_edit(self, quotation):
         return quotation.status in Quotation.EDITABLE_STATUSES
+
+    def get_active_approval(self, quotation):
+        """The cycle currently in flight, so the quote page can link straight to it
+        instead of leaving the rep guessing who is sitting on the deal."""
+        from approvals.models import ApprovalRequest
+
+        request = quotation.approval_requests.filter(status=ApprovalRequest.PENDING).first()
+        if request is None:
+            return None
+        step = request.current_step
+        return {
+            "id": str(request.id),
+            "required_level": request.required_level,
+            "risk_score_snapshot": str(request.risk_score_snapshot),
+            "current_stage": step.stage if step else None,
+            "current_stage_label": step.get_stage_display() if step else None,
+        }
+
+    def get_last_decision(self, quotation):
+        """The most recent reviewer action — this is how a returned or rejected quote
+        finally shows the rep *why* it came back."""
+        from approvals.models import ApprovalStep
+
+        step = (
+            ApprovalStep.objects.filter(approval_request__quotation=quotation)
+            .exclude(action=ApprovalStep.PENDING)
+            .select_related("reviewer")
+            .order_by("-acted_at")
+            .first()
+        )
+        if step is None:
+            return None
+        return {
+            "action": step.action,
+            "stage_label": step.get_stage_display(),
+            "reason": step.reason,
+            "reviewer_name": (
+                (step.reviewer.full_name or step.reviewer.email) if step.reviewer else None
+            ),
+            "acted_at": step.acted_at,
+        }

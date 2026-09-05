@@ -8,6 +8,8 @@ import DiscountConfigPage from '../features/admin/DiscountConfigPage'
 import ProductsPage from '../features/admin/ProductsPage'
 import ApprovalDetailPage from '../features/approvals/ApprovalDetailPage'
 import ApprovalsListPage from '../features/approvals/ApprovalsListPage'
+import FulfillmentDetailPage from '../features/fulfillment/FulfillmentDetailPage'
+import FulfillmentListPage from '../features/fulfillment/FulfillmentListPage'
 import QuotationBuilderPage from '../features/quotations/QuotationBuilderPage'
 import QuotationsListPage from '../features/quotations/QuotationsListPage'
 import PrivateRoute from '../routes/PrivateRoute'
@@ -63,6 +65,22 @@ export default function App() {
           element={
             <PrivateRoute roles={['sales_manager', 'finance_ops', 'admin']}>
               <ApprovalDetailPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/fulfillment"
+          element={
+            <PrivateRoute roles={['finance_ops', 'admin', 'sales_manager']}>
+              <FulfillmentListPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/fulfillment/:id"
+          element={
+            <PrivateRoute roles={['finance_ops', 'admin', 'sales_manager']}>
+              <FulfillmentDetailPage />
             </PrivateRoute>
           }
         />

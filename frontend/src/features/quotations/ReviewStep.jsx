@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { parseApiError } from '../../shared/api/errors'
 import { formatCurrency, formatPct } from '../../shared/format'
@@ -61,6 +62,92 @@ function DiscountCell({ quotationId, line, editable }) {
   )
 }
 
+/** Where the deal actually stands — who is holding it, or why it came back. Without this
+ *  the rep has a quotation page that says "Pending Approval" and nothing else. */
+function GovernanceBanner({ quotation }) {
+  const approval = quotation.active_approval
+  const decision = quotation.last_decision
+
+  if (quotation.status === 'pending_approval' && approval) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-amber-900">
+              Waiting on {approval.current_stage_label ?? 'review'}
+            </h2>
+            <p className="mt-1 text-sm text-amber-800">
+              Routing score {parseFloat(approval.risk_score_snapshot)} required{' '}
+              {approval.required_level === 'manager_then_finance'
+                ? 'Sales Manager then Finance'
+                : 'Sales Manager'}
+              . Editing any line re-scores the deal and restarts this approval from the first
+              stage.
+            </p>
+            <p className="mt-1 text-xs text-amber-700">
+              That score is the greater of the blended average (
+              {parseFloat(quotation.blended_risk_score)}) and the worst single line (
+              {parseFloat(quotation.max_single_overage)}), so one heavily discounted line
+              cannot hide inside an otherwise-compliant quote.
+            </p>
+          </div>
+          <Link
+            to={`/approvals/${approval.id}`}
+            className="whitespace-nowrap rounded-lg border border-amber-600 px-3.5 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100"
+          >
+            View approval
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  if (quotation.status === 'rejected' && decision) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+        <h2 className="text-sm font-semibold text-red-900">
+          Rejected by {decision.reviewer_name} ({decision.stage_label})
+        </h2>
+        {decision.reason && <p className="mt-1 text-sm text-red-800">“{decision.reason}”</p>}
+        <p className="mt-2 text-sm text-red-800">
+          A rejection is final — this quotation can no longer be edited or resubmitted. Start a
+          new quotation for the customer.
+        </p>
+      </div>
+    )
+  }
+
+  if (quotation.status === 'draft' && decision?.action === 'returned') {
+    return (
+      <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+        <h2 className="text-sm font-semibold text-orange-900">
+          Returned by {decision.reviewer_name} ({decision.stage_label})
+        </h2>
+        {decision.reason && <p className="mt-1 text-sm text-orange-800">“{decision.reason}”</p>}
+        <p className="mt-2 text-sm text-orange-800">
+          Adjust the lines below and submit again — that opens a fresh approval cycle.
+        </p>
+      </div>
+    )
+  }
+
+  if (quotation.status === 'approved') {
+    return (
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+        <h2 className="text-sm font-semibold text-emerald-900">Approved</h2>
+        <p className="mt-1 text-sm text-emerald-800">
+          {decision
+            ? `Signed off by ${decision.reviewer_name} (${decision.stage_label}).`
+            : 'Within policy, so no approval was required.'}{' '}
+          Approved quotations are locked from editing.
+        </p>
+      </div>
+    )
+  }
+
+  return null
+}
+
 export default function ReviewStep({ quotation, editable, onBack, onSubmit, isSubmitting, submitError }) {
   const [deleteLine] = useDeleteLineMutation()
   const { formError } = parseApiError(submitError)
@@ -75,6 +162,8 @@ export default function ReviewStep({ quotation, editable, onBack, onSubmit, isSu
           {formError}
         </div>
       )}
+
+      <GovernanceBanner quotation={quotation} />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
         <div className="space-y-5">
@@ -202,9 +291,22 @@ export default function ReviewStep({ quotation, editable, onBack, onSubmit, isSu
                 <dt className="text-slate-500">Avg. discount</dt>
                 <dd className="text-slate-900">{formatPct(quotation.average_discount_pct)}</dd>
               </div>
+              {/* Headlines the same number the governance banner and the approvals
+                  screens use — the routing score. The two inputs it is derived from sit
+                  underneath so the figures can always be reconciled. */}
               <div className="flex justify-between">
-                <dt className="text-slate-500">Risk score</dt>
-                <dd className="text-slate-900">{parseFloat(quotation.blended_risk_score)}</dd>
+                <dt className="text-slate-500">Routing score</dt>
+                <dd className="font-medium text-slate-900">
+                  {parseFloat(quotation.routing_score)}
+                </dd>
+              </div>
+              <div className="flex justify-between text-xs">
+                <dt className="text-slate-400">Blended average</dt>
+                <dd className="text-slate-500">{parseFloat(quotation.blended_risk_score)}</dd>
+              </div>
+              <div className="flex justify-between text-xs">
+                <dt className="text-slate-400">Worst single line</dt>
+                <dd className="text-slate-500">{parseFloat(quotation.max_single_overage)}</dd>
               </div>
             </dl>
           </section>

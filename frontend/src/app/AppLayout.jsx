@@ -30,6 +30,12 @@ const NAV = [
     icon: 'discounts',
     roles: ['sales_manager', 'finance_ops', 'admin'],
   },
+  {
+    label: 'Fulfillment',
+    to: '/fulfillment',
+    icon: 'orders',
+    roles: ['finance_ops', 'admin', 'sales_manager'],
+  },
   { label: 'Customers', icon: 'customers' },
   { label: 'Products', to: '/admin/products', icon: 'products', roles: ['admin'] },
   {

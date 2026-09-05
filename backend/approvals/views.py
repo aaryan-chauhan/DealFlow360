@@ -4,9 +4,8 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
-from accounts.models import Role
 from accounts.permissions import IsCompanyMember
-from accounts.scoping import get_membership
+from accounts.scoping import get_membership, scope_to_owner
 from audit_log.models import AuditEntry
 from quotations.models import Quotation
 from quotations.serializers import QuotationDetailSerializer
@@ -37,8 +36,7 @@ class ApprovalViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
             .prefetch_related("steps__reviewer", "quotation__lines")
         )
         # A rep can watch their own deal move through review, but never anyone else's.
-        if self.membership.role.code == Role.SALES_REP:
-            qs = qs.filter(quotation__owner=self.request.user)
+        qs = scope_to_owner(qs, self.membership, self.request.user, "quotation__owner")
         status_filter = self.request.query_params.get("status")
         if status_filter:
             qs = qs.filter(status__in=status_filter.split(","))

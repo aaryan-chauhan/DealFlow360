@@ -7,7 +7,7 @@ from rest_framework.response import Response
 
 from accounts.models import Role
 from accounts.permissions import IsCompanyMember
-from accounts.scoping import get_membership
+from accounts.scoping import get_membership, scope_to_owner
 from approvals.serializers import ApprovalRequestSerializer
 from approvals.services import reassess_after_line_change, route_quotation
 
@@ -57,9 +57,7 @@ class QuotationScopedMixin:
         qs = Quotation.objects.filter(company=self.membership.company).select_related(
             "customer", "owner"
         )
-        if self.membership.role.code == Role.SALES_REP:
-            qs = qs.filter(owner=self.request.user)
-        return qs
+        return scope_to_owner(qs, self.membership, self.request.user)
 
     def get_serializer_context(self):
         return {**super().get_serializer_context(), "membership": self.membership}
@@ -133,16 +131,41 @@ class QuotationLineCreateView(QuotationScopedMixin, CreateAPIView):
         return get_object_or_404(self.scoped_quotations(), pk=self.kwargs["quotation_id"])
 
     def create(self, request, *args, **kwargs):
+        """Adding a product already on the quote tops up that line instead of opening a
+        second one. Enforced here rather than in the picker so every path — the product
+        screen, a repeated POST, a double-clicked button — lands on one line per
+        (product, variant). Two rows for the same product would also distort the risk
+        engine, which weights each line's overage by its own value (§7.1).
+        """
         quotation = self.get_quotation()
         self.assert_editable(quotation)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save(quotation=quotation)
+
+        existing = QuotationLine.objects.filter(
+            quotation=quotation,
+            product=serializer.validated_data["product"],
+            variant=serializer.validated_data.get("variant"),
+        ).first()
+
+        if existing is None:
+            serializer.save(quotation=quotation)
+            payload, code = serializer.data, status.HTTP_201_CREATED
+        else:
+            # The existing unit_price and discount stand: the price is a deliberate
+            # snapshot from when the line was first added (§5.4), and the picker has no
+            # discount field, so taking its default 0 would silently wipe a discount the
+            # rep had already negotiated on the review step.
+            existing.qty += serializer.validated_data["qty"]
+            existing.save()
+            payload = QuotationLineSerializer(existing).data
+            payload["merged"] = True
+            code = status.HTTP_200_OK
+
         # An edit after submission re-runs the risk engine automatically (§7.1).
         assessment, _ = reassess_after_line_change(quotation, request.user)
         return Response(
-            {"line": serializer.data, "assessment": assessment_payload(assessment)},
-            status=status.HTTP_201_CREATED,
+            {"line": payload, "assessment": assessment_payload(assessment)}, status=code
         )
 
 

@@ -41,13 +41,25 @@ def route_quotation(quotation, actor, trigger="submit"):
     assessment = risk.assess_quotation(quotation)
 
     quotation.blended_risk_score = assessment.blended_score
-    quotation.save(update_fields=["blended_risk_score", "updated_at"])
+    quotation.max_single_overage = assessment.max_single_overage
+    quotation.save(
+        update_fields=["blended_risk_score", "max_single_overage", "updated_at"]
+    )
 
     # A re-score invalidates any cycle still in flight — the reviewers were looking at
     # different numbers.
     superseded = None
     existing = open_request_for(quotation)
     if existing:
+        # Steps already signed off are discarded with the cycle; say so explicitly so the
+        # reviewer can see their approval was not quietly ignored.
+        completed = [
+            f"{step.get_stage_display()} ({step.reviewer.full_name or step.reviewer.email})"
+            for step in existing.steps.exclude(action=ApprovalStep.PENDING).select_related(
+                "reviewer"
+            )
+            if step.reviewer
+        ]
         existing.status = ApprovalRequest.SUPERSEDED
         existing.save(update_fields=["status", "updated_at"])
         superseded = existing
@@ -56,8 +68,12 @@ def route_quotation(quotation, actor, trigger="submit"):
             actor,
             quotation,
             "approval_superseded",
-            reason="Quotation lines changed while approval was pending.",
+            reason=(
+                "Quotation lines changed while approval was pending."
+                + (f" Discarded sign-off from: {', '.join(completed)}." if completed else "")
+            ),
             approval_request_id=str(existing.id),
+            discarded_approvals=completed,
             trigger=trigger,
         )
 
@@ -86,6 +102,10 @@ def route_quotation(quotation, actor, trigger="submit"):
     for sequence, stage in enumerate(STAGES_FOR_LEVEL[assessment.required_level], start=1):
         ApprovalStep.objects.create(approval_request=request, stage=stage, sequence=sequence)
 
+    if superseded:
+        superseded.superseded_by = request
+        superseded.save(update_fields=["superseded_by", "updated_at"])
+
     if quotation.status != Quotation.PENDING_APPROVAL:
         quotation.set_status(Quotation.PENDING_APPROVAL, actor)
 
@@ -113,7 +133,10 @@ def reassess_after_line_change(quotation, actor):
         # but nothing is routed until the rep submits.
         assessment = risk.assess_quotation(quotation)
         quotation.blended_risk_score = assessment.blended_score
-        quotation.save(update_fields=["blended_risk_score", "updated_at"])
+        quotation.max_single_overage = assessment.max_single_overage
+        quotation.save(
+            update_fields=["blended_risk_score", "max_single_overage", "updated_at"]
+        )
         return assessment, None
     return route_quotation(quotation, actor, trigger="line_edit")
 

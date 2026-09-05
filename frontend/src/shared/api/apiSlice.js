@@ -2,8 +2,15 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
 
 import { credentialsReceived, loggedOut } from '../../auth/authSlice'
 
+// Same host the app was served from, port 8000. Opened at http://192.168.9.23:5173
+// the API is http://192.168.9.23:8000/api; at localhost it stays localhost. Set
+// VITE_API_BASE_URL to override (e.g. a deployed API on a different host).
+const apiBaseUrl =
+  import.meta.env.VITE_API_BASE_URL ??
+  `${window.location.protocol}//${window.location.hostname}:8000/api`
+
 const baseQuery = fetchBaseQuery({
-  baseUrl: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api',
+  baseUrl: apiBaseUrl,
   prepareHeaders: (headers, { getState }) => {
     const token = getState().auth.access
     if (token) headers.set('Authorization', `Bearer ${token}`)
@@ -48,6 +55,7 @@ export const apiSlice = createApi({
     'Customer',
     'Quotation',
     'Approval',
+    'Fulfillment',
   ],
   endpoints: () => ({}),
 })

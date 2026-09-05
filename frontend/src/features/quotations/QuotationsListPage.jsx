@@ -101,7 +101,7 @@ export default function QuotationsListPage() {
                   {formatCurrency(quotation.total_value)}
                 </td>
                 <td className="px-5 py-3 text-right text-sm text-slate-600">
-                  {parseFloat(quotation.blended_risk_score)}
+                  {parseFloat(quotation.routing_score)}
                 </td>
                 <td className="px-5 py-3">
                   <StatusPill value={quotation.status} />

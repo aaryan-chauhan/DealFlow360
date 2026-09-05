@@ -34,6 +34,11 @@ class ApprovalRequest(UUIDModel, TimeStampedModel):
     )
     required_level = models.CharField(max_length=32)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=PENDING)
+    # When a line edit forces a re-score, this cycle is superseded and points at the one
+    # that replaced it — otherwise a reviewer sitting on the old request hits a dead end.
+    superseded_by = models.OneToOneField(
+        "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="supersedes"
+    )
 
     class Meta:
         db_table = "approval_request"

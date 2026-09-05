@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { useSelector } from 'react-redux'
 import { Link, useParams } from 'react-router-dom'
 
+import { selectActiveMembership } from '../../auth/authSlice'
 import { parseApiError } from '../../shared/api/errors'
 import { formatCurrency, formatPct } from '../../shared/format'
 import Modal from '../../shared/ui/Modal'
@@ -11,6 +13,28 @@ import {
   useRejectRequestMutation,
   useReturnRequestMutation,
 } from './approvalsApi'
+
+const STAGE_LABEL = { manager: 'Sales Manager', finance: 'Finance / Ops' }
+
+/** A disabled Approve button with no explanation is what makes a correctly-working chain
+ *  look like a permissions bug. This says which stage holds the deal, and — when the
+ *  viewer has a stage of their own further down the chain — that it is coming to them. */
+function WhyDisabled({ data }) {
+  const membership = useSelector(selectActiveMembership)
+  const role = membership?.role?.code
+  const myStage = role === 'finance_ops' ? 'finance' : role === 'sales_manager' ? 'manager' : null
+  const mine = data.steps.find((step) => step.stage === myStage)
+  const current = STAGE_LABEL[data.current_stage] ?? 'the current reviewer'
+
+  let detail = `Only ${current} can act on the current step — and never the quote's own owner.`
+  if (mine && mine.action === 'pending' && data.current_stage !== myStage) {
+    detail = `${current} signs first. This comes to you (${STAGE_LABEL[myStage]}) once that step is approved.`
+  } else if (mine && mine.action !== 'pending') {
+    detail = `You already recorded "${mine.action}" on the ${STAGE_LABEL[myStage]} step. It now sits with ${current}.`
+  }
+
+  return <p className="mt-2 text-xs text-slate-500">{detail}</p>
+}
 
 const STAGE_TONE = {
   approved: 'border-emerald-500 bg-emerald-500 text-white',
@@ -107,6 +131,60 @@ function ReasonModal({ title, confirmLabel, tone, onClose, onConfirm, isLoading,
   )
 }
 
+/** A closed request must always say what happened next, or the reviewer is stranded on a
+ *  page with a greyed-out Approve button. */
+function ClosedBanner({ data }) {
+  if (data.status === 'pending') return null
+
+  if (data.status === 'superseded') {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <h2 className="text-sm font-semibold text-amber-900">
+          The quotation changed while this request was open
+        </h2>
+        <p className="mt-1 text-sm text-amber-800">
+          The rep edited a line, so the risk engine re-scored the deal and this cycle was
+          superseded. Any sign-off already given here no longer applies.
+        </p>
+        {data.superseded_by ? (
+          <Link
+            to={`/approvals/${data.superseded_by}`}
+            className="mt-3 inline-block rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+          >
+            Open the current approval request →
+          </Link>
+        ) : (
+          <p className="mt-2 text-sm text-amber-800">
+            The revised quotation now sits inside policy, so it no longer needs approval — it
+            moved straight to <strong>{data.quotation_status}</strong>.
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  const tone =
+    data.status === 'approved'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+      : data.status === 'rejected'
+        ? 'border-red-200 bg-red-50 text-red-900'
+        : 'border-orange-200 bg-orange-50 text-orange-900'
+  const copy = {
+    approved: 'Fully approved. Every stage in the chain has signed off.',
+    rejected:
+      'Rejected — this is final. The quotation cannot be edited or resubmitted; a new quotation is needed.',
+    returned:
+      'Returned to the rep. The quotation is back in draft so they can revise it and submit a fresh approval cycle.',
+  }[data.status]
+
+  return (
+    <div className={`rounded-xl border p-4 ${tone}`}>
+      <h2 className="text-sm font-semibold">This request is closed</h2>
+      <p className="mt-1 text-sm">{copy}</p>
+    </div>
+  )
+}
+
 export default function ApprovalDetailPage() {
   const { id } = useParams()
   const { data, isLoading } = useGetApprovalQuery(id)
@@ -144,6 +222,8 @@ export default function ApprovalDetailPage() {
         </div>
       )}
 
+      <ClosedBanner data={data} />
+
       <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-slate-900">Approval Chain</h2>
@@ -172,6 +252,9 @@ export default function ApprovalDetailPage() {
             />
           </ol>
 
+          {/* Closed requests drop the buttons entirely — the banner above explains where
+              the decision went, so three dead grey buttons only add confusion. */}
+          {data.status === 'pending' && (
           <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-200 pt-4">
             <button
               onClick={() => approve({ id })}
@@ -195,13 +278,8 @@ export default function ApprovalDetailPage() {
               Return to rep
             </button>
           </div>
-          {!canAct && (
-            <p className="mt-2 text-xs text-slate-500">
-              {data.status !== 'pending'
-                ? 'This request is closed.'
-                : `Only the ${data.current_stage === 'finance' ? 'Finance / Ops' : 'Sales Manager'} reviewer can act on the current step — and never the quote's own owner.`}
-            </p>
           )}
+          {data.status === 'pending' && !canAct && <WhyDisabled data={data} />}
         </section>
 
         <aside className="space-y-5">

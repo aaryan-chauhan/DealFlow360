@@ -7,30 +7,45 @@ import { useAddLineMutation } from './quotationsApi'
 
 const CATEGORIES = ['All Products', 'Hardware', 'Software', 'Services', 'Subscription']
 
-function QtyStepper({ value, onChange }) {
+/** Picks how many units this click ADDS — never an absolute quantity. The "add" prefix
+ *  and the "3 + 12 = 15" hint exist so that typing 12 next to a line already holding 3
+ *  cannot be misread as setting the line to 12. */
+function QtyStepper({ value, onChange, onQuote = 0 }) {
   return (
-    <div className="inline-flex items-center rounded-lg border border-slate-300">
-      <button
-        type="button"
-        onClick={() => onChange(Math.max(1, value - 1))}
-        className="px-2.5 py-1 text-slate-500 hover:text-slate-800"
-        aria-label="Decrease quantity"
-      >
-        −
-      </button>
-      <input
-        value={value}
-        onChange={(e) => onChange(Math.max(1, Number(e.target.value) || 1))}
-        className="w-12 border-x border-slate-300 py-1 text-center text-sm outline-none"
-      />
-      <button
-        type="button"
-        onClick={() => onChange(value + 1)}
-        className="px-2.5 py-1 text-slate-500 hover:text-slate-800"
-        aria-label="Increase quantity"
-      >
-        +
-      </button>
+    <div className="inline-flex flex-col items-end gap-0.5">
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs font-medium text-slate-400">add</span>
+        <div className="inline-flex items-center rounded-lg border border-slate-300">
+          <button
+            type="button"
+            onClick={() => onChange(Math.max(1, value - 1))}
+            className="px-2.5 py-1 text-slate-500 hover:text-slate-800"
+            aria-label="Decrease units to add"
+          >
+            −
+          </button>
+          <input
+            value={value}
+            onChange={(e) => onChange(Math.max(1, Number(e.target.value) || 1))}
+            aria-label="Units to add"
+            className="w-12 border-x border-slate-300 py-1 text-center text-sm outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => onChange(value + 1)}
+            className="px-2.5 py-1 text-slate-500 hover:text-slate-800"
+            aria-label="Increase units to add"
+          >
+            +
+          </button>
+        </div>
+      </div>
+      {onQuote > 0 && (
+        <span className="whitespace-nowrap text-[11px] text-slate-400">
+          {onQuote} + {value} = <strong className="text-slate-600">{onQuote + value}</strong> on
+          the quote
+        </span>
+      )}
     </div>
   )
 }
@@ -39,18 +54,34 @@ export default function ProductsStep({ quotationId, lines }) {
   const [category, setCategory] = useState(CATEGORIES[0])
   const [search, setSearch] = useState('')
   const [quantities, setQuantities] = useState({})
+  const [justAdded, setJustAdded] = useState(null)
   const { data: products = [], isLoading } = useGetProductsQuery(search || undefined)
   const [addLine, { isLoading: isAdding, error }] = useAddLineMutation()
   const { formError } = parseApiError(error)
 
   const visible =
     category === 'All Products' ? products : products.filter((p) => p.category === category)
-  const inCart = new Set(lines.map((line) => line.product))
+  // Quantity already on the quotation, per product. `lines` comes straight from the
+  // server, so after an Add it reflects the merged total rather than this screen's guess.
+  const onQuote = Object.fromEntries(lines.map((line) => [line.product, parseFloat(line.qty)]))
 
   async function handleAdd(product) {
     const qty = quantities[product.id] ?? 1
     try {
-      await addLine({ quotationId, product: product.id, qty, discount_pct: 0 }).unwrap()
+      const result = await addLine({
+        quotationId,
+        product: product.id,
+        qty,
+        discount_pct: 0,
+      }).unwrap()
+      // Confirm what the click actually did — the add is additive, so the useful number
+      // is the line's new running total, not the amount just typed.
+      setJustAdded({
+        product: product.id,
+        added: qty,
+        total: parseFloat(result.line.qty),
+        merged: Boolean(result.line.merged),
+      })
       setQuantities((q) => ({ ...q, [product.id]: 1 }))
     } catch {
       /* surfaced through `error` */
@@ -137,8 +168,17 @@ export default function ProductsStep({ quotationId, lines }) {
                         </span>
                         <div>
                           <p className="text-sm font-medium text-slate-900">{product.name}</p>
-                          {inCart.has(product.id) && (
-                            <p className="text-xs text-emerald-600">Already in this quote</p>
+                          {onQuote[product.id] > 0 && (
+                            <p className="text-xs text-emerald-600">
+                              <strong>{onQuote[product.id]}</strong> already on this quote —
+                              adding tops up that line
+                            </p>
+                          )}
+                          {justAdded?.product === product.id && (
+                            <p className="text-xs font-medium text-brand-700">
+                              Added {justAdded.added} → line is now {justAdded.total}
+                              {justAdded.merged && ' (merged into the existing line)'}
+                            </p>
                           )}
                         </div>
                       </div>
@@ -147,19 +187,23 @@ export default function ProductsStep({ quotationId, lines }) {
                       {formatCurrency(product.base_price)}
                     </td>
                     <td className="px-5 py-3 text-sm text-slate-600">{product.category}</td>
-                    <td className="px-5 py-3 text-center">
+                    <td className="px-5 py-3 text-right">
                       <QtyStepper
                         value={quantities[product.id] ?? 1}
+                        onQuote={onQuote[product.id] ?? 0}
                         onChange={(qty) => setQuantities((q) => ({ ...q, [product.id]: qty }))}
                       />
                     </td>
                     <td className="px-5 py-3 text-right">
+                      {/* Adding a product that is already on the quote tops up the
+                          existing line rather than opening a second one, so the label
+                          says what will actually happen. */}
                       <button
                         onClick={() => handleAdd(product)}
                         disabled={isAdding}
                         className="rounded-md bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                       >
-                        Add
+                        {onQuote[product.id] > 0 ? 'Add more' : 'Add'}
                       </button>
                     </td>
                   </tr>
