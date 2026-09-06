@@ -59,6 +59,24 @@ PRODUCTS = [
         Decimal("18.00"),
         "Half-day rollout training for up to 20 staff.",
     ),
+    (
+        "HP EliteBook 840",
+        Product.HARDWARE,
+        Decimal("95000.00"),
+        False,
+        "unit",
+        Decimal("18.00"),
+        "14\" premium business laptop, i7 / 16GB / 512GB SSD.",
+    ),
+    (
+        "Cloud Backup Service",
+        Product.SOFTWARE,
+        Decimal("6000.00"),
+        True,
+        "seat/year",
+        Decimal("18.00"),
+        "Automated cloud backup & disaster recovery, per seat annual licence.",
+    ),
 ]
 
 VARIANTS = {

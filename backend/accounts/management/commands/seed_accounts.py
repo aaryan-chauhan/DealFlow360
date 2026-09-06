@@ -19,12 +19,17 @@ STAFF = [
     ("priya@company.com", "Priya Nair", Role.FINANCE_OPS),
     ("rohan@company.com", "Rohan Mehta", Role.SALES_REP),
     ("karan@company.com", "Karan Shah", Role.SALES_REP),
+    ("meera@company.com", "Meera Iyer", Role.SALES_REP),
+    ("vikram@company.com", "Vikram Rao", Role.SALES_REP),
 ]
 
 CUSTOMERS = [
     ("Acme Technologies Pvt Ltd", Customer.GOLD, "procurement@acmetech.example", "Mumbai, India"),
     ("Global Retail Ltd", Customer.SILVER, "buying@globalretail.example", "Delhi, India"),
     ("TechCorp Solutions", Customer.BRONZE, "orders@techcorp.example", "Bangalore, India"),
+    ("Bluewave Industries", Customer.GOLD, "purchasing@bluewave.example", "Pune, India"),
+    ("Horizon Retail Group", Customer.SILVER, "sourcing@horizonretail.example", "Chennai, India"),
+    ("Nimbus Startups Pvt Ltd", Customer.BRONZE, "hello@nimbusstartups.example", "Hyderabad, India"),
 ]
 
 

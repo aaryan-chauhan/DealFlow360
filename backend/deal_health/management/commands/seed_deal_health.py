@@ -4,18 +4,19 @@ from deal_health.models import AnomalyAlert
 from deal_health.services import run_deal_health_scan
 from quotations.models import Quotation
 
+COMPANY_NAME = "Acme Solutions"
+
 
 class Command(BaseCommand):
     help = "Seed deal health anomaly alerts for demo tenant"
 
     def handle(self, *args, **kwargs):
-        company = Company.objects.first()
-        if not company:
-            self.stdout.write(self.style.ERROR("No company found. Seed accounts first."))
+        try:
+            company = Company.objects.get(name=COMPANY_NAME)
+        except Company.DoesNotExist:
+            self.stdout.write(self.style.ERROR(f"Company '{COMPANY_NAME}' not found. Run `seed_accounts` first."))
             return
 
-        self.stdout.write("---> Running seed_deal_health...")
-        
         # 1. Run live deal health scanner
         stats = run_deal_health_scan(company)
         self.stdout.write(f"scanner complete: {stats['scanned_count']} checked, {stats['new_alerts_count']} new alerts created.")

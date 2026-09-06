@@ -7,7 +7,8 @@ Runs:
 4. seed_quotations — Seed Quotations across Draft, Pending Approval, Approved, Negotiation, Confirmed
 5. seed_fulfillment — Warehouses (Main, East Depot), Stock Levels, Fulfillment Orders & Splits
 6. seed_subscriptions — Subscription Plans, Active Subscriptions & Invoices
-7. seed_portal — Active Customer Portal session & opening thread message
+7. seed_pipeline_history — Extra reps/customers/products with a full approve/reject/return trail
+8. seed_portal — Active Customer Portal session & opening thread message
 """
 
 from django.core.management import call_command
@@ -28,6 +29,7 @@ class Command(BaseCommand):
             ("quotations", "seed_quotations"),
             ("warehouses_fulfillment", "seed_fulfillment"),
             ("subscriptions_billing", "seed_subscriptions"),
+            ("quotations", "seed_pipeline_history"),
             ("portal", "seed_portal"),
             ("deal_health", "seed_deal_health"),
         ]

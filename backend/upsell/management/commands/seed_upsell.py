@@ -26,6 +26,7 @@ class Command(BaseCommand):
         warranty = products.get("Extended Warranty")
         onsite = products.get("Onsite Support Plan")
         training = products.get("Training & Onboarding")
+        hp_elitebook = products.get("HP EliteBook 840")
 
         rules_to_seed = []
         if dell and warranty:
@@ -51,6 +52,22 @@ class Command(BaseCommand):
                 "score": Decimal("90.00"),
                 "promoted": True,
                 "min_margin": Decimal("15.00"),
+            })
+        if hp_elitebook and warranty:
+            rules_to_seed.append({
+                "source": hp_elitebook,
+                "target": warranty,
+                "score": Decimal("80.00"),
+                "promoted": True,
+                "min_margin": Decimal("10.00"),
+            })
+        if hp_elitebook and onsite:
+            rules_to_seed.append({
+                "source": hp_elitebook,
+                "target": onsite,
+                "score": Decimal("70.00"),
+                "promoted": False,
+                "min_margin": Decimal("12.00"),
             })
 
         for r in rules_to_seed:

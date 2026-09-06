@@ -56,6 +56,8 @@ STOCK = {
     "Extended Warranty": {"Mumbai WH": 4, "Bangalore WH": 3},
     "Onsite Support Plan": {"Mumbai WH": 6, "Bangalore WH": 6},
     "Training & Onboarding": {"Mumbai WH": 5, "Bangalore WH": 2},
+    "HP EliteBook 840": {"Mumbai WH": 8, "Bangalore WH": 6},
+    "Cloud Backup Service": {"Mumbai WH": 50, "Bangalore WH": 50},
 }
 
 # owner email, customer name, [(product, qty)], what it proves
