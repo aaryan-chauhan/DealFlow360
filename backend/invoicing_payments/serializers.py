@@ -144,6 +144,7 @@ class InvoiceDetailSerializer(InvoiceListSerializer):
     amount_credited = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     owner_name = serializers.SerializerMethodField()
     can_record_payment = serializers.SerializerMethodField()
+    can_issue_credit_note = serializers.SerializerMethodField()
 
     class Meta(InvoiceListSerializer.Meta):
         fields = InvoiceListSerializer.Meta.fields + [
@@ -154,6 +155,7 @@ class InvoiceDetailSerializer(InvoiceListSerializer):
             "amount_credited",
             "owner_name",
             "can_record_payment",
+            "can_issue_credit_note",
             "created_at",
         ]
 
@@ -170,6 +172,11 @@ class InvoiceDetailSerializer(InvoiceListSerializer):
     def get_can_record_payment(self, invoice):
         return self.context.get("can_record_payment", False)
 
+    def get_can_issue_credit_note(self, invoice):
+        # Same Finance/Ops-or-Admin gate as recording a payment (§3) — one flag reused
+        # under a second name so the frontend reads intent rather than a shared boolean.
+        return self.context.get("can_record_payment", False)
+
 
 class RecordPaymentSerializer(serializers.Serializer):
     amount = serializers.DecimalField(
@@ -179,3 +186,10 @@ class RecordPaymentSerializer(serializers.Serializer):
         choices=[choice[0] for choice in Payment.METHOD_CHOICES], default=Payment.BANK_TRANSFER
     )
     reference = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class IssueCreditNoteSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal("0.01")
+    )
+    reason = serializers.CharField(allow_blank=False)

@@ -21,6 +21,7 @@ from .serializers import (
     CounterOfferInputSerializer,
     CustomerLoginSerializer,
     CustomerQuotationSummarySerializer,
+    DeliveryDateInputSerializer,
     NegotiationMessageSerializer,
     PortalQuotationSerializer,
 )
@@ -35,6 +36,7 @@ from .services import (
     list_customer_quotations,
     open_quotation_session,
     post_comment,
+    request_delivery_date,
     resolve_customer_token,
     resolve_token,
 )
@@ -112,6 +114,34 @@ class PortalCommentView(PortalBaseView):
 
         line = self.resolve_line(session, serializer.validated_data.get("quotation_line"))
         message = post_comment(session, serializer.validated_data["body"], line=line)
+        return Response(
+            self.payload(session, {"message": NegotiationMessageSerializer(message).data}),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PortalDeliveryDateView(PortalBaseView):
+    """POST /api/portal/{token}/request-delivery-date
+
+    A request, not a commitment — it lands in the shared thread for a rep or Finance/Ops
+    to act on (e.g. adjusting the fulfillment order's promised date) rather than silently
+    changing anything itself.
+    """
+
+    def post(self, request, token):
+        session = self.session_from(token)
+        serializer = DeliveryDateInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        assert_scope(session, serializer.validated_data.get("quotation"))
+        assert_actionable(session)
+
+        line = self.resolve_line(session, serializer.validated_data.get("quotation_line"))
+        message = request_delivery_date(
+            session,
+            serializer.validated_data["requested_delivery_date"],
+            body=serializer.validated_data.get("body", ""),
+            line=line,
+        )
         return Response(
             self.payload(session, {"message": NegotiationMessageSerializer(message).data}),
             status=status.HTTP_201_CREATED,

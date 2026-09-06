@@ -55,6 +55,18 @@ export const quotationsApi = apiSlice.injectEndpoints({
         'Approval',
       ],
     }),
+    applyBulkDiscount: builder.mutation({
+      query: ({ quotationId, discount_pct }) => ({
+        url: `/quotations/${quotationId}/bulk-discount`,
+        method: 'POST',
+        body: { discount_pct },
+      }),
+      invalidatesTags: (r, e, { quotationId }) => [
+        { type: 'Quotation', id: quotationId },
+        'Quotation',
+        'Approval',
+      ],
+    }),
     submitForApproval: builder.mutation({
       query: (id) => ({ url: `/quotations/${id}/submit-for-approval`, method: 'POST', body: {} }),
       invalidatesTags: (r, e, id) => [{ type: 'Quotation', id }, 'Quotation', 'Approval'],
@@ -119,6 +131,7 @@ export const {
   useAddLineMutation,
   useUpdateLineMutation,
   useDeleteLineMutation,
+  useApplyBulkDiscountMutation,
   useSubmitForApprovalMutation,
   useGeneratePortalLinkMutation,
   useReplyToNegotiationMutation,

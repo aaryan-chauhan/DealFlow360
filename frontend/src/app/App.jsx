@@ -1,5 +1,5 @@
 import { useSelector } from 'react-redux'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useParams } from 'react-router-dom'
 
 import LoginPage from '../auth/LoginPage'
 import SignupPage from '../auth/SignupPage'
@@ -7,13 +7,13 @@ import { selectIsAuthenticated } from '../auth/authSlice'
 import DiscountConfigPage from '../features/admin/DiscountConfigPage'
 import ProductsPage from '../features/admin/ProductsPage'
 import SubscriptionPlansPage from '../features/admin/SubscriptionPlansPage'
+import UpsellRulesPage from '../features/admin/UpsellRulesPage'
 import WarehousesPage from '../features/admin/WarehousesPage'
 import ApprovalDetailPage from '../features/approvals/ApprovalDetailPage'
 
 import ApprovalsListPage from '../features/approvals/ApprovalsListPage'
 import DashboardPage from '../features/dashboard/DashboardPage'
-import FulfillmentDetailPage from '../features/fulfillment/FulfillmentDetailPage'
-import FulfillmentListPage from '../features/fulfillment/FulfillmentListPage'
+import FulfillmentPage from '../features/fulfillment/FulfillmentPage'
 import InvoiceDetailPage from '../features/invoices/InvoiceDetailPage'
 import InvoicesListPage from '../features/invoices/InvoicesListPage'
 import QuotationBuilderPage from '../features/quotations/QuotationBuilderPage'
@@ -28,6 +28,13 @@ import AppLayout from './AppLayout'
 function PublicOnly({ children }) {
   const isAuthenticated = useSelector(selectIsAuthenticated)
   return isAuthenticated ? <Navigate to="/dashboard" replace /> : children
+}
+
+// The list and detail screens merged into one split-screen page (B6); this keeps any
+// old `/fulfillment/:id` link or bookmark landing on the right order instead of 404ing.
+function FulfillmentRedirect() {
+  const { id } = useParams()
+  return <Navigate to={`/fulfillment?order=${id}`} replace />
 }
 
 export default function App() {
@@ -73,7 +80,7 @@ export default function App() {
         <Route
           path="/approvals"
           element={
-            <PrivateRoute roles={['sales_manager', 'finance_ops', 'admin']}>
+            <PrivateRoute roles={['sales_rep', 'sales_manager', 'finance_ops', 'admin']}>
               <ApprovalsListPage />
             </PrivateRoute>
           }
@@ -81,7 +88,7 @@ export default function App() {
         <Route
           path="/approvals/:id"
           element={
-            <PrivateRoute roles={['sales_manager', 'finance_ops', 'admin']}>
+            <PrivateRoute roles={['sales_rep', 'sales_manager', 'finance_ops', 'admin']}>
               <ApprovalDetailPage />
             </PrivateRoute>
           }
@@ -89,19 +96,12 @@ export default function App() {
         <Route
           path="/fulfillment"
           element={
-            <PrivateRoute roles={['finance_ops', 'admin', 'sales_manager']}>
-              <FulfillmentListPage />
+            <PrivateRoute roles={['sales_rep', 'finance_ops', 'admin', 'sales_manager']}>
+              <FulfillmentPage />
             </PrivateRoute>
           }
         />
-        <Route
-          path="/fulfillment/:id"
-          element={
-            <PrivateRoute roles={['finance_ops', 'admin', 'sales_manager']}>
-              <FulfillmentDetailPage />
-            </PrivateRoute>
-          }
-        />
+        <Route path="/fulfillment/:id" element={<FulfillmentRedirect />} />
         <Route path="/subscriptions" element={<SubscriptionsListPage />} />
         <Route path="/subscriptions/:id/billing" element={<BillingDetailPage />} />
         <Route path="/invoices" element={<InvoicesListPage />} />
@@ -135,6 +135,14 @@ export default function App() {
           element={
             <PrivateRoute roles={['admin', 'finance_ops']}>
               <SubscriptionPlansPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin/upsell-rules"
+          element={
+            <PrivateRoute roles={['admin']}>
+              <UpsellRulesPage />
             </PrivateRoute>
           }
         />

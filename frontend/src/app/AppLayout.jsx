@@ -30,13 +30,13 @@ const NAV = [
     label: 'Approvals',
     to: '/approvals',
     icon: 'discounts',
-    roles: ['sales_manager', 'finance_ops', 'admin'],
+    roles: ['sales_rep', 'sales_manager', 'finance_ops', 'admin'],
   },
   {
     label: 'Fulfillment',
     to: '/fulfillment',
     icon: 'orders',
-    roles: ['finance_ops', 'admin', 'sales_manager'],
+    roles: ['sales_rep', 'finance_ops', 'admin', 'sales_manager'],
   },
   {
     label: 'Warehouses',
@@ -45,6 +45,7 @@ const NAV = [
     roles: ['admin', 'finance_ops', 'sales_manager'],
   },
   { label: 'Products', to: '/admin/products', icon: 'products', roles: ['admin'] },
+  { label: 'Upsell Rules', to: '/admin/upsell-rules', icon: 'discounts', roles: ['admin'] },
   {
     label: 'Discount Config',
     to: '/admin/discount-config',
@@ -54,6 +55,12 @@ const NAV = [
   { label: 'Invoices', to: '/invoices', icon: 'invoices' },
 
   { label: 'Subscriptions', to: '/subscriptions', icon: 'subscriptions' },
+  {
+    label: 'Subscription Plans',
+    to: '/admin/subscription-plans',
+    icon: 'subscriptions',
+    roles: ['admin', 'finance_ops'],
+  },
 ]
 
 

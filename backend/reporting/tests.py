@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.test import TestCase
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from accounts.models import Company, Customer, Membership, Role, User
 from catalog.models import Product
@@ -20,6 +21,15 @@ class ReportingSmokeTest(TestCase):
         )
         Membership.objects.create(
             user=self.other_owner, company=self.company, role=role_rep, is_active_default=True
+        )
+        role_manager, _ = Role.objects.get_or_create(
+            code=Role.SALES_MANAGER, defaults={"label": "Sales Manager"}
+        )
+        self.manager = User.objects.create_user(
+            email="manager@smoke.test", password="x", full_name="Manager One"
+        )
+        Membership.objects.create(
+            user=self.manager, company=self.company, role=role_manager, is_active_default=True
         )
         self.customer = Customer.objects.create(company=self.company, name="ACME", tier="Gold", email="a@acme.test")
         self.widget = Product.objects.create(
@@ -105,6 +115,24 @@ class ReportingSmokeTest(TestCase):
     def test_pdf_export_does_not_crash(self):
         content = generate_reporting_pdf(self.company)
         self.assertTrue(content.startswith(b"%PDF"))
+
+    def test_export_endpoint_pdf(self):
+        # Exercises the real URL/view/DRF-negotiation path, not just the service function
+        # directly — a `?format=pdf` query param collides with DRF's own renderer-suffix
+        # param of the same name, which the direct-call tests above can't catch.
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+        response = client.get("/api/reports/export", {"format": "pdf"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertTrue(response.content.startswith(b"%PDF"))
+
+    def test_export_endpoint_xls(self):
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+        response = client.get("/api/reports/export", {"format": "xls"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.content.startswith(b"PK"))
 
     def test_pdf_export_respects_filters(self):
         content = generate_reporting_pdf(self.company, category="Services")

@@ -6,7 +6,7 @@ import { parseApiError } from '../../shared/api/errors'
 import { formatCurrency } from '../../shared/format'
 import Modal from '../../shared/ui/Modal'
 import StatusPill from '../../shared/ui/StatusPill'
-import { useGetInvoiceQuery, useRecordPaymentMutation } from './invoicesApi'
+import { useGetInvoiceQuery, useIssueCreditNoteMutation, useRecordPaymentMutation } from './invoicesApi'
 
 const apiBaseUrl =
   import.meta.env.VITE_API_BASE_URL ??
@@ -16,6 +16,7 @@ export default function InvoiceDetailPage() {
   const { id } = useParams()
   const { data: invoice, isLoading } = useGetInvoiceQuery(id)
   const [paying, setPaying] = useState(false)
+  const [crediting, setCrediting] = useState(false)
 
   if (isLoading) return <p className="text-sm text-slate-500">Loading invoice…</p>
   if (!invoice) return <p className="text-sm text-slate-500">Invoice not found.</p>
@@ -51,6 +52,14 @@ export default function InvoiceDetailPage() {
 
         <div className="flex gap-2">
           <DownloadSummaryButton invoice={invoice} />
+          {invoice.can_issue_credit_note && !settled && (
+            <button
+              onClick={() => setCrediting(true)}
+              className="rounded-lg border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+            >
+              Issue credit note
+            </button>
+          )}
           {invoice.can_record_payment && !settled && (
             <button
               onClick={() => setPaying(true)}
@@ -95,6 +104,7 @@ export default function InvoiceDetailPage() {
       </div>
 
       {paying && <PaymentDialog invoice={invoice} onClose={() => setPaying(false)} />}
+      {crediting && <CreditNoteDialog invoice={invoice} onClose={() => setCrediting(false)} />}
     </div>
   )
 }
@@ -388,6 +398,83 @@ function PaymentDialog({ invoice, onClose }) {
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
           >
             {state.isLoading ? 'Recording…' : 'Record payment'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function CreditNoteDialog({ invoice, onClose }) {
+  const [amount, setAmount] = useState(String(invoice.balance_due))
+  const [reason, setReason] = useState('')
+  const [issue, state] = useIssueCreditNoteMutation()
+  const { formError, fieldErrors } = parseApiError(state.error)
+
+  async function submit(event) {
+    event.preventDefault()
+    try {
+      await issue({ id: invoice.id, amount, reason }).unwrap()
+      onClose()
+    } catch {
+      /* surfaced below */
+    }
+  }
+
+  return (
+    <Modal
+      title="Issue credit note"
+      subtitle={`${invoice.invoice_number} — ${formatCurrency(invoice.balance_due)} outstanding`}
+      onClose={onClose}
+    >
+      <form onSubmit={submit} className="space-y-4">
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium text-slate-700">Amount</span>
+          <input
+            type="number"
+            step="0.01"
+            min="0.01"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm outline-none focus:border-brand-600 focus:ring-4 focus:ring-brand-100"
+          />
+          {fieldErrors.amount && (
+            <span className="mt-1.5 block text-xs text-red-600">{fieldErrors.amount}</span>
+          )}
+        </label>
+
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium text-slate-700">Reason</span>
+          <textarea
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            rows={3}
+            placeholder="Billing correction, dispute, goodwill adjustment…"
+            className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm outline-none focus:border-brand-600 focus:ring-4 focus:ring-brand-100"
+          />
+          {fieldErrors.reason && (
+            <span className="mt-1.5 block text-xs text-red-600">{fieldErrors.reason}</span>
+          )}
+        </label>
+
+        {formError && (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{formError}</p>
+        )}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={state.isLoading}
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+          >
+            {state.isLoading ? 'Issuing…' : 'Issue credit note'}
           </button>
         </div>
       </form>

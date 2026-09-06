@@ -58,6 +58,14 @@ export const portalApi = createApi({
       query: ({ token, ...body }) => ({ url: `/${token}/confirm`, method: 'POST', body }),
       invalidatesTags: ['PortalQuotation'],
     }),
+    postDeliveryDateRequest: builder.mutation({
+      query: ({ token, ...body }) => ({
+        url: `/${token}/request-delivery-date`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['PortalQuotation'],
+    }),
   }),
 })
 
@@ -69,4 +77,5 @@ export const {
   usePostCommentMutation,
   usePostCounterOfferMutation,
   useConfirmQuotationMutation,
+  usePostDeliveryDateRequestMutation,
 } = portalApi

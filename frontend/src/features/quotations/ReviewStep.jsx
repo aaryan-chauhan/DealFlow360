@@ -7,6 +7,7 @@ import StatusPill from '../../shared/ui/StatusPill'
 import NegotiationPanel from './NegotiationPanel'
 import {
   useAddSuggestionMutation,
+  useApplyBulkDiscountMutation,
   useDeleteLineMutation,
   useDismissSuggestionMutation,
   useGetSuggestionsQuery,
@@ -66,6 +67,55 @@ function DiscountCell({ quotationId, line, editable }) {
         <span className="text-sm text-slate-500">%</span>
       </div>
       {error && <span className="mt-1 max-w-[180px] text-right text-xs text-red-600">{error}</span>}
+    </div>
+  )
+}
+
+/** Order-level discount (§B3) — sets one discount % across every line at once, instead of
+ *  a rep editing each line by hand. Line-level `DiscountCell` edits still win afterwards;
+ *  this is a starting point for the whole order, not a locked ceiling. */
+function BulkDiscountControl({ quotationId }) {
+  const [value, setValue] = useState('')
+  const [applyBulkDiscount, { isLoading, error }] = useApplyBulkDiscountMutation()
+  const { formError, fieldErrors } = parseApiError(error)
+
+  async function apply() {
+    const pct = Number(value)
+    if (Number.isNaN(pct) || value === '') return
+    try {
+      await applyBulkDiscount({ quotationId, discount_pct: pct }).unwrap()
+    } catch {
+      /* surfaced below */
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-medium text-slate-500">Apply to every line:</span>
+      <div className="inline-flex items-center gap-1">
+        <input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="0"
+          inputMode="decimal"
+          className={`w-16 rounded-md border px-2 py-1 text-right text-sm outline-none focus:ring-2 ${
+            fieldErrors.discount_pct
+              ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
+              : 'border-slate-300 focus:border-brand-600 focus:ring-brand-100'
+          }`}
+        />
+        <span className="text-sm text-slate-500">%</span>
+      </div>
+      <button
+        onClick={apply}
+        disabled={isLoading || value === ''}
+        className="rounded-md bg-slate-800 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+      >
+        {isLoading ? 'Applying…' : 'Apply order-level discount'}
+      </button>
+      {(formError || fieldErrors.discount_pct) && (
+        <span className="text-xs text-red-600">{fieldErrors.discount_pct ?? formError}</span>
+      )}
     </div>
   )
 }
@@ -234,7 +284,14 @@ function UpsellPanel({ quotation, editable }) {
           <div key={sug.id} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm space-y-2">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <p className="font-semibold text-xs text-slate-900">{sug.product_name}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-semibold text-xs text-slate-900">{sug.product_name}</p>
+                  {sug.is_promoted && (
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">
+                      Promo
+                    </span>
+                  )}
+                </div>
                 <p className="text-[11px] text-slate-500">{sug.product_category}</p>
               </div>
               <span className="font-bold text-xs text-slate-900">{formatCurrency(sug.base_price || 0)}</span>
@@ -321,6 +378,12 @@ export default function ReviewStep({ quotation, editable, onBack, onSubmit, isSu
           </section>
 
           <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            {editable && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-3">
+                <h2 className="text-sm font-semibold text-slate-900">Products</h2>
+                <BulkDiscountControl quotationId={quotation.id} />
+              </div>
+            )}
             <table className="w-full">
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>

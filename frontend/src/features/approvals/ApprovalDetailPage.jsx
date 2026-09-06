@@ -275,7 +275,7 @@ export default function ApprovalDetailPage() {
               disabled={!canAct}
               className="rounded-lg border border-slate-300 px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Return to rep
+              Return for revision
             </button>
           </div>
           )}
@@ -389,7 +389,7 @@ export default function ApprovalDetailPage() {
       )}
       {modal === 'return' && (
         <ReasonModal
-          title="Return to rep"
+          title="Return for revision"
           confirmLabel="Return"
           tone="warning"
           isLoading={returnState.isLoading}

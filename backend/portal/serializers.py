@@ -25,6 +25,7 @@ class NegotiationMessageSerializer(serializers.ModelSerializer):
             "message_type",
             "body",
             "counter_discount_pct",
+            "requested_delivery_date",
             "author_side",
             "author_name",
             "quotation_line",
@@ -176,6 +177,15 @@ class CounterOfferInputSerializer(CommentInputSerializer):
     counter_discount_pct = serializers.DecimalField(
         max_digits=5, decimal_places=2, min_value=Decimal("0"), max_value=Decimal("100")
     )
+
+
+class DeliveryDateInputSerializer(serializers.Serializer):
+    requested_delivery_date = serializers.DateField()
+    body = serializers.CharField(
+        max_length=4000, required=False, allow_blank=True, trim_whitespace=True, default=""
+    )
+    quotation_line = serializers.UUIDField(required=False, allow_null=True)
+    quotation = serializers.UUIDField(required=False, allow_null=True)
 
 
 class ConfirmInputSerializer(serializers.Serializer):

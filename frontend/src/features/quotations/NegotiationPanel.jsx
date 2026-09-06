@@ -181,6 +181,12 @@ function Bubble({ message }) {
               {message.line_label ? ` on ${message.line_label}` : ' on the whole quote'}
             </p>
           )}
+          {message.message_type === 'delivery_date_request' && (
+            <p className="mb-1 text-xs font-semibold text-brand-700">
+              Requested delivery: {formatDate(message.requested_delivery_date)}
+              {message.line_label ? ` for ${message.line_label}` : ''}
+            </p>
+          )}
           {message.message_type === 'confirmation' && (
             <p className="mb-1 text-xs font-semibold text-emerald-700">Quote accepted</p>
           )}

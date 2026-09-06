@@ -62,6 +62,15 @@ class QuotationLineSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class BulkDiscountSerializer(serializers.Serializer):
+    """One discount percentage applied to every line on the quote at once — the
+    order-level counterpart to editing a single line's `discount_pct` (§B3)."""
+
+    discount_pct = serializers.DecimalField(
+        max_digits=5, decimal_places=2, min_value=Decimal("0"), max_value=Decimal("100")
+    )
+
+
 class QuotationStatusHistorySerializer(serializers.ModelSerializer):
     changed_by_name = serializers.SerializerMethodField()
 

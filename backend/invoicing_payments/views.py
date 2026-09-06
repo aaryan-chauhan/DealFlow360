@@ -12,9 +12,10 @@ from .models import Invoice
 from .serializers import (
     InvoiceDetailSerializer,
     InvoiceListSerializer,
+    IssueCreditNoteSerializer,
     RecordPaymentSerializer,
 )
-from .services import invoice_summary_text, record_payment
+from .services import invoice_summary_text, issue_credit_note, record_payment
 
 # §3: Finance / Ops "reconcile billing/credit notes"; Admin has everything. Recording a
 # payment moves money against a financial record, so it stops here — a rep can watch
@@ -107,6 +108,33 @@ class InvoiceViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
             data["amount"],
             method=data["method"],
             reference=data.get("reference", ""),
+        )
+        invoice.refresh_from_db()
+        return Response(
+            InvoiceDetailSerializer(invoice, context=self.get_serializer_context()).data
+        )
+
+    @action(detail=True, methods=["post"], url_path="issue-credit-note")
+    def issue_credit_note_action(self, request, pk=None):
+        """Ad-hoc credit note for a billing correction or dispute — distinct from the
+        credit note `cancel_subscription` auto-issues on cancellation (§5.10, §7.3.3),
+        this is the path for a Finance/Ops-initiated correction against a live invoice."""
+        if self.membership.role.code not in FINANCE_ROLES:
+            raise PermissionDenied("Only Finance / Ops or an Admin can issue a credit note.")
+        invoice = self.get_object()
+        if invoice.status == Invoice.VOID:
+            raise ValidationError({"detail": "This invoice is void."})
+
+        serializer = IssueCreditNoteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        if data["amount"] > invoice.balance_due:
+            raise ValidationError(
+                {"amount": f"Exceeds the outstanding balance of {invoice.balance_due}."}
+            )
+
+        issue_credit_note(
+            invoice.customer, data["amount"], data["reason"], invoice=invoice, user=request.user
         )
         invoice.refresh_from_db()
         return Response(

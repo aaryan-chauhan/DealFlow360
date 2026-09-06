@@ -295,6 +295,34 @@ def post_comment(session, body, line=None):
     return message
 
 
+def request_delivery_date(session, requested_date, body="", line=None):
+    """A customer's preferred delivery date — a request, not a commitment. It lands in
+    the same thread a rep already watches (§5.9); acting on it (updating the fulfillment
+    order's promised date) is a human decision on the internal side, not automatic."""
+    quotation = session.quotation
+    message = NegotiationMessage.objects.create(
+        quotation=quotation,
+        quotation_line=line,
+        author_customer=session.customer,
+        message_type=NegotiationMessage.DELIVERY_DATE_REQUEST,
+        requested_delivery_date=requested_date,
+        body=body,
+    )
+    record(
+        quotation.company,
+        None,
+        quotation,
+        "portal_delivery_date_requested",
+        reason=body[:500],
+        portal_session_id=str(session.id),
+        customer_id=str(session.customer_id),
+        customer_name=session.customer.name,
+        requested_delivery_date=str(requested_date),
+        triggered_by="customer_portal",
+    )
+    return message
+
+
 @transaction.atomic
 def apply_counter_offer(session, discount_pct, body="", line=None):
     """The heart of §11's negotiation loop.

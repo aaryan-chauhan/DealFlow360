@@ -14,6 +14,7 @@ from approvals.services import reassess_after_line_change, route_quotation
 
 from .models import Quotation, QuotationLine
 from .serializers import (
+    BulkDiscountSerializer,
     QuotationDetailSerializer,
     QuotationLineSerializer,
     QuotationListSerializer,
@@ -121,6 +122,41 @@ class QuotationViewSet(QuotationScopedMixin, viewsets.ModelViewSet):
                 "approval_request": (
                     ApprovalRequestSerializer(approval_request).data if approval_request else None
                 ),
+            }
+        )
+
+    @action(detail=True, methods=["post"], url_path="bulk-discount")
+    def bulk_discount(self, request, pk=None):
+        """Order-level discount (§B3) — one percentage applied to every line at once,
+        rather than a rep editing each line by hand. Same editability/ownership guard
+        and risk re-scoring as a single-line edit."""
+        quotation = self.get_object()
+        self.assert_editable(quotation)
+        if (
+            self.membership.role.code == Role.SALES_REP
+            and quotation.owner_id != request.user.id
+        ):
+            raise PermissionDenied("You can only edit your own quotations.")
+
+        serializer = BulkDiscountSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        discount_pct = serializer.validated_data["discount_pct"]
+
+        lines = list(quotation.lines.all())
+        if not lines:
+            raise ValidationError({"detail": "Add at least one line before applying a discount."})
+        for line in lines:
+            line.discount_pct = discount_pct
+            line.save(update_fields=["discount_pct", "line_total", "updated_at"])
+
+        assessment, _ = reassess_after_line_change(quotation, request.user)
+        quotation.refresh_from_db()
+        return Response(
+            {
+                "quotation": QuotationDetailSerializer(
+                    quotation, context=self.get_serializer_context()
+                ).data,
+                "assessment": assessment_payload(assessment),
             }
         )
 

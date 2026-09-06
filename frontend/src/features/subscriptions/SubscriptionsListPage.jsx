@@ -10,6 +10,7 @@ import { useGetSubscriptionsQuery, useRunBillingMutation } from './subscriptions
 const TABS = [
   { label: 'All', value: '' },
   { label: 'Active', value: 'active' },
+  { label: 'Paused', value: 'paused' },
   { label: 'Cancelled', value: 'cancelled' },
 ]
 

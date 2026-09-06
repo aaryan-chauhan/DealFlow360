@@ -7,6 +7,7 @@ Django adapter around it, and every entry point is a plain function callable eit
 synchronously from a view or from a Celery task once Celery is wired.
 """
 
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
@@ -351,6 +352,74 @@ def modify_subscription(
         proration_event=str(event.id),
     )
     return event
+
+
+# ---------------------------------------------------------------------------
+# Pause / resume
+# ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def pause_subscription(subscription, actor=None, *, reason=""):
+    """Puts billing on hold. `due_cycles()` only ever selects `status=ACTIVE` rows, so a
+    paused subscription simply stops being picked up by the recurring billing run — its
+    already-scheduled cycles are left exactly where they are rather than dropped, unlike
+    cancellation, since a pause is expected to end with the customer resuming."""
+    if subscription.status != Subscription.ACTIVE:
+        raise ValueError("Only an active subscription can be paused.")
+
+    subscription.status = Subscription.PAUSED
+    subscription.paused_at = timezone.now()
+    subscription.save(update_fields=["status", "paused_at", "updated_at"])
+
+    record(
+        subscription.company,
+        actor,
+        subscription,
+        "subscription_paused",
+        reason=reason,
+    )
+    return subscription
+
+
+@transaction.atomic
+def resume_subscription(subscription, actor=None, *, reason=""):
+    """Resumes a paused subscription, shifting every not-yet-billed period and
+    `next_bill_date` forward by however many whole days the pause lasted — so the days on
+    hold are never billed, and the schedule picks up exactly where it left off rather than
+    immediately owing for time the customer could not use the service."""
+    if subscription.status != Subscription.PAUSED:
+        raise ValueError("Only a paused subscription can be resumed.")
+
+    paused_days = 0
+    if subscription.paused_at:
+        paused_days = (timezone.now().date() - subscription.paused_at.date()).days
+
+    if paused_days > 0:
+        shift = timedelta(days=paused_days)
+        unbilled = subscription.billing_cycles.filter(
+            invoice_line__isnull=True, billed_externally=False
+        )
+        for cycle in unbilled:
+            cycle.period_start += shift
+            cycle.period_end += shift
+            cycle.save(update_fields=["period_start", "period_end", "updated_at"])
+        subscription.next_bill_date += shift
+
+    subscription.status = Subscription.ACTIVE
+    subscription.paused_at = None
+    subscription.save(update_fields=["status", "paused_at", "next_bill_date", "updated_at"])
+    ensure_scheduled_cycles(subscription)
+
+    record(
+        subscription.company,
+        actor,
+        subscription,
+        "subscription_resumed",
+        reason=reason,
+        paused_days=paused_days,
+    )
+    return subscription
 
 
 # ---------------------------------------------------------------------------

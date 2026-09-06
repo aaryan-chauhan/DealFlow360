@@ -69,11 +69,13 @@ class NegotiationMessage(UUIDModel):
 
     COMMENT = "comment"
     COUNTER_OFFER = "counter_offer"
+    DELIVERY_DATE_REQUEST = "delivery_date_request"
     CONFIRMATION = "confirmation"
     SYSTEM = "system"
     TYPE_CHOICES = [
         (COMMENT, "Comment"),
         (COUNTER_OFFER, "Counter-offer"),
+        (DELIVERY_DATE_REQUEST, "Delivery date request"),
         (CONFIRMATION, "Confirmation"),
         (SYSTEM, "System"),
     ]
@@ -100,7 +102,7 @@ class NegotiationMessage(UUIDModel):
         blank=True,
         related_name="negotiation_messages",
     )
-    message_type = models.CharField(max_length=16, choices=TYPE_CHOICES, default=COMMENT)
+    message_type = models.CharField(max_length=24, choices=TYPE_CHOICES, default=COMMENT)
     body = models.TextField(blank=True)
     # What the risk engine reads to decide whether this counter-offer re-triggers an
     # approval cycle (§5.9, §7.1).
@@ -111,6 +113,9 @@ class NegotiationMessage(UUIDModel):
         blank=True,
         validators=[MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("100"))],
     )
+    # Set only on a `delivery_date_request` message — the date the customer is asking
+    # fulfillment to promise, not a commitment until a rep or Finance/Ops acts on it.
+    requested_delivery_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

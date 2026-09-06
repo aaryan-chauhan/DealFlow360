@@ -9,6 +9,7 @@ from .views import (
     PortalCommentView,
     PortalConfirmView,
     PortalCounterOfferView,
+    PortalDeliveryDateView,
     PortalLoginView,
     PortalMyQuotationsView,
     PortalOpenQuotationView,
@@ -33,4 +34,9 @@ urlpatterns = [
         name="portal-counter-offer",
     ),
     path("<str:token>/confirm", PortalConfirmView.as_view(), name="portal-confirm"),
+    path(
+        "<str:token>/request-delivery-date",
+        PortalDeliveryDateView.as_view(),
+        name="portal-request-delivery-date",
+    ),
 ]

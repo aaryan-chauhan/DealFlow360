@@ -30,6 +30,22 @@ export const subscriptionsApi = apiSlice.injectEndpoints({
         'Invoice',
       ],
     }),
+    pauseSubscription: builder.mutation({
+      query: ({ id, ...body }) => ({
+        url: `/subscriptions/${id}/pause`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (r, e, { id }) => [{ type: 'Subscription', id }, 'Subscription'],
+    }),
+    resumeSubscription: builder.mutation({
+      query: ({ id, ...body }) => ({
+        url: `/subscriptions/${id}/resume`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (r, e, { id }) => [{ type: 'Subscription', id }, 'Subscription'],
+    }),
     cancelSubscription: builder.mutation({
       query: ({ id, ...body }) => ({
         url: `/subscriptions/${id}/cancel`,
@@ -55,6 +71,8 @@ export const {
   useGetBillingDetailQuery,
   useGetSubscriptionPlansQuery,
   useModifySubscriptionMutation,
+  usePauseSubscriptionMutation,
+  useResumeSubscriptionMutation,
   useCancelSubscriptionMutation,
   useRunBillingMutation,
 } = subscriptionsApi

@@ -10,6 +10,8 @@ import {
   useGetBillingDetailQuery,
   useGetSubscriptionPlansQuery,
   useModifySubscriptionMutation,
+  usePauseSubscriptionMutation,
+  useResumeSubscriptionMutation,
 } from './subscriptionsApi'
 
 const REFUND_LABELS = {
@@ -22,6 +24,7 @@ export default function BillingDetailPage() {
   const { id } = useParams()
   const { data: subscription, isLoading } = useGetBillingDetailQuery(id)
   const [dialog, setDialog] = useState(null)
+  const [resume, resumeState] = useResumeSubscriptionMutation()
 
   if (isLoading) {
     return <p className="text-sm text-slate-500">Loading billing schedule…</p>
@@ -31,6 +34,7 @@ export default function BillingDetailPage() {
   }
 
   const isActive = subscription.status === 'active'
+  const isPaused = subscription.status === 'paused'
 
   return (
     <div className="space-y-5">
@@ -58,9 +62,9 @@ export default function BillingDetailPage() {
           </p>
         </div>
 
-        {isActive && (
+        {(isActive || isPaused) && (
           <div className="flex gap-2">
-            {subscription.can_manage && (
+            {isActive && subscription.can_manage && (
               <button
                 onClick={() => setDialog('modify')}
                 className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
@@ -68,7 +72,24 @@ export default function BillingDetailPage() {
                 Modify quantity / plan
               </button>
             )}
-            {subscription.can_refund && (
+            {isActive && subscription.can_manage && (
+              <button
+                onClick={() => setDialog('pause')}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Pause subscription
+              </button>
+            )}
+            {isPaused && subscription.can_manage && (
+              <button
+                onClick={() => resume({ id: subscription.id })}
+                disabled={resumeState.isLoading}
+                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+              >
+                {resumeState.isLoading ? 'Resuming…' : 'Resume subscription'}
+              </button>
+            )}
+            {isActive && subscription.can_refund && (
               <button
                 onClick={() => setDialog('cancel')}
                 className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
@@ -80,7 +101,15 @@ export default function BillingDetailPage() {
         )}
       </div>
 
-      {!isActive && subscription.cancelled_at && (
+      {isPaused && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800">
+          Paused on {new Date(subscription.paused_at).toLocaleDateString()}. Billing is on hold —
+          resuming shifts every unbilled period forward by however long it was paused, so no
+          charge is made for the time on hold.
+        </div>
+      )}
+
+      {!isActive && !isPaused && subscription.cancelled_at && (
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-3 text-sm text-slate-600">
           Cancelled on {new Date(subscription.cancelled_at).toLocaleDateString()}
           {subscription.cancellation_reason && <> — “{subscription.cancellation_reason}”</>}. The{' '}
@@ -103,6 +132,9 @@ export default function BillingDetailPage() {
 
       {dialog === 'modify' && (
         <ModifyDialog subscription={subscription} onClose={() => setDialog(null)} />
+      )}
+      {dialog === 'pause' && (
+        <PauseDialog subscription={subscription} onClose={() => setDialog(null)} />
       )}
       {dialog === 'cancel' && (
         <CancelDialog subscription={subscription} onClose={() => setDialog(null)} />
@@ -495,6 +527,72 @@ function ModifyDialog({ subscription, onClose }) {
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
           >
             {state.isLoading ? 'Applying…' : 'Apply change'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function PauseDialog({ subscription, onClose }) {
+  const [reason, setReason] = useState('')
+  const [pause, state] = usePauseSubscriptionMutation()
+  const { formError } = parseApiError(state.error)
+
+  async function submit(event) {
+    event.preventDefault()
+    try {
+      await pause({ id: subscription.id, reason }).unwrap()
+      onClose()
+    } catch {
+      /* surfaced below */
+    }
+  }
+
+  return (
+    <Modal
+      title="Pause subscription"
+      subtitle="Billing stops until you resume — no cycles are dropped, only held."
+      onClose={onClose}
+    >
+      <form onSubmit={submit} className="space-y-4">
+        <div className="rounded-lg bg-slate-50 px-4 py-3 text-xs text-slate-600">
+          <p className="font-medium text-slate-700">What will happen</p>
+          <ul className="mt-1.5 list-disc space-y-1 pl-4">
+            <li>The recurring billing run skips this subscription entirely while paused.</li>
+            <li>Nothing is refunded or credited — this is a hold, not a cancellation.</li>
+            <li>Resuming shifts every unbilled period forward by the days paused.</li>
+          </ul>
+        </div>
+
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium text-slate-700">Reason</span>
+          <input
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="e.g. Customer requested a temporary hold"
+            className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm outline-none focus:border-brand-600 focus:ring-4 focus:ring-brand-100"
+          />
+        </label>
+
+        {formError && (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{formError}</p>
+        )}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={state.isLoading}
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+          >
+            {state.isLoading ? 'Pausing…' : 'Pause subscription'}
           </button>
         </div>
       </form>

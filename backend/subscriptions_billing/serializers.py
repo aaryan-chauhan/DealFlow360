@@ -148,6 +148,7 @@ class SubscriptionDetailSerializer(SubscriptionListSerializer):
             "credit_notes",
             "cancelled_at",
             "cancellation_reason",
+            "paused_at",
             "can_manage",
             "can_refund",
         ]
@@ -235,6 +236,10 @@ class ModifySubscriptionSerializer(serializers.Serializer):
         if "new_qty" not in attrs and "new_plan" not in attrs:
             raise serializers.ValidationError("Provide new_qty and/or new_plan.")
         return attrs
+
+
+class PauseSubscriptionSerializer(serializers.Serializer):
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 class CancelSubscriptionSerializer(serializers.Serializer):

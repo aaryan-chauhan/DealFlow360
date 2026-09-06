@@ -6,6 +6,7 @@ import {
   useGetPortalQuotationQuery,
   usePostCommentMutation,
   usePostCounterOfferMutation,
+  usePostDeliveryDateRequestMutation,
 } from './portalApi'
 
 const currency = new Intl.NumberFormat('en-IN', {
@@ -117,6 +118,14 @@ function Bubble({ message }) {
             >
               Counter-offer: {pct(message.counter_discount_pct)}
               {message.line_label ? ` on ${message.line_label}` : ' on the whole quote'}
+            </p>
+          )}
+          {message.message_type === 'delivery_date_request' && (
+            <p
+              className={`mb-1 text-xs font-semibold ${mine ? 'text-blue-100' : 'text-brand-700'}`}
+            >
+              Requested delivery: {formatDate(message.requested_delivery_date)}
+              {message.line_label ? ` for ${message.line_label}` : ''}
             </p>
           )}
           {message.message_type === 'confirmation' && (
@@ -237,19 +246,27 @@ function ActionPanel({ token, quotation, onBusyChange }) {
   const [discount, setDiscount] = useState('')
   const [scope, setScope] = useState('')
   const [showCounter, setShowCounter] = useState(false)
+  const [showDelivery, setShowDelivery] = useState(false)
+  const [deliveryDate, setDeliveryDate] = useState('')
   const [confirming, setConfirming] = useState(false)
   const [notice, setNotice] = useState(null)
 
   const [postComment, commentState] = usePostCommentMutation()
   const [postCounterOffer, counterState] = usePostCounterOfferMutation()
+  const [postDeliveryDateRequest, deliveryState] = usePostDeliveryDateRequestMutation()
   const [confirmQuotation, confirmState] = useConfirmQuotationMutation()
 
-  const busy = commentState.isLoading || counterState.isLoading || confirmState.isLoading
+  const busy =
+    commentState.isLoading ||
+    counterState.isLoading ||
+    deliveryState.isLoading ||
+    confirmState.isLoading
   useEffect(() => onBusyChange?.(busy), [busy, onBusyChange])
 
   const error =
     portalError(commentState.error) ??
     portalError(counterState.error) ??
+    portalError(deliveryState.error) ??
     portalError(confirmState.error)
 
   if (!quotation.can_act) {
@@ -294,6 +311,25 @@ function ActionPanel({ token, quotation, onBusyChange }) {
           ? 'Your counter-offer has been sent to our team for approval.'
           : 'Your counter-offer has been applied to the quotation.',
       )
+    } catch {
+      /* surfaced through `error` */
+    }
+  }
+
+  async function sendDeliveryDate() {
+    if (!deliveryDate) return
+    try {
+      await postDeliveryDateRequest({
+        token,
+        requested_delivery_date: deliveryDate,
+        body: comment.trim(),
+        quotation: quotation.id,
+        quotation_line: scope || null,
+      }).unwrap()
+      setComment('')
+      setDeliveryDate('')
+      setShowDelivery(false)
+      setNotice('Your preferred delivery date has been shared with your account manager.')
     } catch {
       /* surfaced through `error` */
     }
@@ -408,6 +444,61 @@ function ActionPanel({ token, quotation, onBusyChange }) {
         </div>
       )}
 
+      {showDelivery && (
+        <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label htmlFor="portal-delivery-date" className="text-xs font-medium text-blue-900">
+                Preferred delivery date
+              </label>
+              <input
+                id="portal-delivery-date"
+                type="date"
+                value={deliveryDate}
+                onChange={(event) => setDeliveryDate(event.target.value)}
+                className="mt-1 rounded-md border border-blue-300 px-2.5 py-1.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+            <div className="min-w-[200px] flex-1">
+              <label htmlFor="portal-delivery-scope" className="text-xs font-medium text-blue-900">
+                Applies to
+              </label>
+              <select
+                id="portal-delivery-scope"
+                value={scope}
+                onChange={(event) => setScope(event.target.value)}
+                className="mt-1 w-full rounded-md border border-blue-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-500"
+              >
+                <option value="">The whole order</option>
+                {quotation.lines.map((line) => (
+                  <option key={line.id} value={line.id}>
+                    {line.product_name} only
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <p className="text-xs text-blue-800">
+            This is a request — your account manager will confirm whether it can be promised.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={sendDeliveryDate}
+              disabled={busy || !deliveryDate}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+            >
+              {deliveryState.isLoading ? 'Sending…' : 'Send request'}
+            </button>
+            <button
+              onClick={() => setShowDelivery(false)}
+              className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-medium text-blue-800 hover:bg-blue-100"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {confirming && (
         <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
           <p className="text-sm text-emerald-900">
@@ -437,6 +528,7 @@ function ActionPanel({ token, quotation, onBusyChange }) {
           onClick={() => {
             setConfirming(true)
             setShowCounter(false)
+            setShowDelivery(false)
           }}
           disabled={busy}
           className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
@@ -446,12 +538,24 @@ function ActionPanel({ token, quotation, onBusyChange }) {
         <button
           onClick={() => {
             setShowCounter(true)
+            setShowDelivery(false)
             setConfirming(false)
           }}
           disabled={busy}
           className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
         >
           Request Changes
+        </button>
+        <button
+          onClick={() => {
+            setShowDelivery(true)
+            setShowCounter(false)
+            setConfirming(false)
+          }}
+          disabled={busy}
+          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+        >
+          Request Delivery Date
         </button>
         <button
           onClick={send}

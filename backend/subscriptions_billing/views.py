@@ -13,11 +13,18 @@ from .serializers import (
     BillingRunSerializer,
     CancelSubscriptionSerializer,
     ModifySubscriptionSerializer,
+    PauseSubscriptionSerializer,
     SubscriptionDetailSerializer,
     SubscriptionListSerializer,
     SubscriptionPlanSerializer,
 )
-from .services import cancel_subscription, modify_subscription, run_recurring_billing
+from .services import (
+    cancel_subscription,
+    modify_subscription,
+    pause_subscription,
+    resume_subscription,
+    run_recurring_billing,
+)
 
 # A mid-cycle quantity change is ordinary account management, so the rep who owns the
 # deal can make one on their own subscription (queryset scoping already limits which
@@ -126,6 +133,37 @@ class SubscriptionViewSet(
                 new_plan=new_plan,
                 effective_date=data.get("effective_date"),
                 reason=data.get("reason", ""),
+            )
+        except ValueError as exc:
+            raise ValidationError({"detail": str(exc)})
+        return self.detail_response(subscription)
+
+    @action(detail=True, methods=["post"])
+    def pause(self, request, pk=None):
+        # A hold on billing, not a refund — same MANAGE_ROLES gate as `modify`.
+        if self.role_code not in MANAGE_ROLES:
+            raise PermissionDenied("Your role cannot pause a subscription.")
+        subscription = self.get_object()
+        serializer = PauseSubscriptionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            pause_subscription(
+                subscription, request.user, reason=serializer.validated_data.get("reason", "")
+            )
+        except ValueError as exc:
+            raise ValidationError({"detail": str(exc)})
+        return self.detail_response(subscription)
+
+    @action(detail=True, methods=["post"])
+    def resume(self, request, pk=None):
+        if self.role_code not in MANAGE_ROLES:
+            raise PermissionDenied("Your role cannot resume a subscription.")
+        subscription = self.get_object()
+        serializer = PauseSubscriptionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            resume_subscription(
+                subscription, request.user, reason=serializer.validated_data.get("reason", "")
             )
         except ValueError as exc:
             raise ValidationError({"detail": str(exc)})

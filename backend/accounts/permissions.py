@@ -84,11 +84,3 @@ def IsApproverForStage(stage):
 
     _IsApproverForStage.__name__ = f"IsApproverFor{stage.title()}"
     return _IsApproverForStage
-
-
-class IsPortalUserForQuotation(BasePermission):
-    """Portal sessions (`portal_session`) do not exist until phase 6, so this denies
-    everything rather than falling back to internal auth."""
-
-    def has_permission(self, request, view):
-        return False

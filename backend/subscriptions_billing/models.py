@@ -108,9 +108,15 @@ class Subscription(UUIDModel, TimeStampedModel):
     """
 
     ACTIVE = "active"
+    PAUSED = "paused"
     CANCELLED = "cancelled"
     EXPIRED = "expired"
-    STATUS_CHOICES = [(ACTIVE, "Active"), (CANCELLED, "Cancelled"), (EXPIRED, "Expired")]
+    STATUS_CHOICES = [
+        (ACTIVE, "Active"),
+        (PAUSED, "Paused"),
+        (CANCELLED, "Cancelled"),
+        (EXPIRED, "Expired"),
+    ]
 
     quotation = models.ForeignKey(
         Quotation,
@@ -139,6 +145,9 @@ class Subscription(UUIDModel, TimeStampedModel):
     next_bill_date = models.DateField()
     cancelled_at = models.DateTimeField(null=True, blank=True)
     cancellation_reason = models.TextField(blank=True)
+    # Set while paused, cleared on resume. Used to shift the billing clock forward by
+    # however long the pause lasted, so a customer is never billed for time on hold.
+    paused_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "subscription"
